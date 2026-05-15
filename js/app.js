@@ -3,6 +3,46 @@ import { db, registerUser, loginUser, getSession, clearSession, mergeBudgetDefau
 import { UNITS, INCOME_SOURCES } from './data.js';
 import { fmt, $, $$, el, toast, openModal, closeModal, confirmDialog, getCategoryMeta, categorySwatch, renderPeriodFilter } from './ui.js';
 
+/* PWA registration + install prompt */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
+let deferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  // Show our install banner if user hasn't dismissed
+  if (!localStorage.getItem('heller_v1.installDismissed')) {
+    showInstallBanner();
+  }
+});
+function showInstallBanner() {
+  if (document.getElementById('install-banner')) return;
+  const banner = el('div', { id: 'install-banner', class: 'install-banner' },
+    el('div', { class: 'install-text' },
+      el('strong', {}, '📲 התקן את האפליקציה'),
+      el('div', {}, 'לגישה מהירה ועבודה גם בלי אינטרנט'),
+    ),
+    el('div', { style: 'display:flex; gap:8px;' },
+      el('button', { class: 'btn btn-ghost btn-sm', onclick: () => {
+        localStorage.setItem('heller_v1.installDismissed', '1');
+        banner.remove();
+      } }, 'לא עכשיו'),
+      el('button', { class: 'btn btn-primary btn-sm', onclick: async () => {
+        if (!deferredInstallPrompt) return banner.remove();
+        deferredInstallPrompt.prompt();
+        const choice = await deferredInstallPrompt.userChoice.catch(() => null);
+        deferredInstallPrompt = null;
+        banner.remove();
+        if (choice?.outcome === 'accepted') toast('האפליקציה מותקנת! 🎉', 'success');
+      } }, 'התקן'),
+    ),
+  );
+  document.body.appendChild(banner);
+}
+
 /* ===========================================================
    App state
    =========================================================== */
@@ -145,6 +185,12 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   $('#add-income').addEventListener('click', () => openIncomeModal());
   $('#add-product-category').addEventListener('click', () => openProductCategoryModal());
+  $('#add-goal').addEventListener('click', () => openGoalModal());
+
+  // Settings: backup / restore
+  $('#export-data').addEventListener('click', exportBackup);
+  $('#import-data').addEventListener('click', () => $('#import-file').click());
+  $('#import-file').addEventListener('change', importBackup);
 });
 
 function logout() {
@@ -183,7 +229,9 @@ function switchTab(name) {
     weekly: 'קניות שבועיות',
     budget: 'תקציב חודשי',
     income: 'הכנסות',
+    goals: 'יעדי חיסכון',
     categories: 'קטגוריות',
+    settings: 'הגדרות',
   };
   $('#mobile-page-title').textContent = titles[name] || '';
   renderCurrent();
@@ -210,7 +258,9 @@ function renderCurrent() {
     case 'weekly': renderWeekly(); break;
     case 'budget': renderBudget(); break;
     case 'income': renderIncome(); break;
+    case 'goals': renderGoals(); break;
     case 'categories': renderProductCategories(); break;
+    case 'settings': renderSettings(); break;
   }
 }
 
@@ -1523,4 +1573,282 @@ function deleteProductCategory(c) {
     renderProductCategories();
     populateCategoryFilter();
   });
+}
+
+
+/* ===========================================================
+   Goals (Savings tracker)
+   =========================================================== */
+function goalSaved(g) {
+  return (g.contributions || []).reduce((s, c) => s + (Number(c.amount) || 0), 0);
+}
+
+function renderGoals() {
+  const goals = db.getGoals();
+
+  // Top stats
+  const statsEl = $('#goals-stats');
+  statsEl.innerHTML = '';
+  const totalTarget = goals.reduce((s, g) => s + (Number(g.target) || 0), 0);
+  const totalSaved = goals.reduce((s, g) => s + goalSaved(g), 0);
+  const totalLeft = Math.max(0, totalTarget - totalSaved);
+
+  statsEl.appendChild(el('div', { class: 'mini-stat glass' },
+    el('div', { class: 'mini-stat-label' }, 'יעדים פעילים'),
+    el('div', { class: 'mini-stat-value' }, String(goals.length)),
+  ));
+  statsEl.appendChild(el('div', { class: 'mini-stat glass' },
+    el('div', { class: 'mini-stat-label' }, 'נחסך בסה"כ'),
+    el('div', { class: 'mini-stat-value' }, fmt.money(totalSaved)),
+  ));
+  statsEl.appendChild(el('div', { class: 'mini-stat glass' },
+    el('div', { class: 'mini-stat-label' }, 'נשאר ליעדים'),
+    el('div', { class: 'mini-stat-value' }, fmt.money(totalLeft)),
+  ));
+
+  const list = $('#goals-list');
+  list.innerHTML = '';
+  if (goals.length === 0) {
+    list.appendChild(emptyState('🎯', 'אין יעדים', 'הגדר יעד ראשון כמו "טיסה לחו"ל" או "קרן חירום"'));
+    return;
+  }
+
+  goals.forEach(g => {
+    const saved = goalSaved(g);
+    const target = Number(g.target) || 0;
+    const pct = target > 0 ? Math.min(100, (saved / target) * 100) : 0;
+    const remaining = Math.max(0, target - saved);
+    const isComplete = saved >= target && target > 0;
+    const daysLeft = g.deadline ? Math.ceil((new Date(g.deadline).getTime() - Date.now()) / (1000*60*60*24)) : null;
+
+    const card = el('div', { class: 'goal-card glass' + (isComplete ? ' complete' : '') });
+    card.appendChild(el('div', { class: 'goal-header' },
+      el('div', { style: 'font-size: 32px;' }, g.icon || '🎯'),
+      el('div', { style: 'flex:1; min-width:0;' },
+        el('div', { class: 'goal-name' }, g.name),
+        el('div', { class: 'goal-meta' },
+          daysLeft != null
+            ? (daysLeft >= 0 ? `${daysLeft} ימים ליעד` : `${-daysLeft} ימים אחרי היעד`)
+            : (g.notes || ''))
+      ),
+    ));
+    if (isComplete) card.querySelector('.goal-header').appendChild(el('div', { class: 'goal-badge' }, '✓ הושלם'));
+
+    card.appendChild(el('div', { class: 'goal-progress-block' },
+      el('div', { class: 'goal-amounts' },
+        el('span', { class: 'saved' }, fmt.money(saved)),
+        el('span', { class: 'sep' }, ' / '),
+        el('span', { class: 'target' }, fmt.money(target)),
+        el('span', { class: 'pct' }, Math.round(pct) + '%'),
+      ),
+      el('div', { class: 'budget-progress big' + (isComplete ? ' done' : '') },
+        el('span', { style: { width: pct + '%' } })),
+      remaining > 0
+        ? el('div', { class: 'goal-remaining' }, `עוד ${fmt.money(remaining)} ליעד 💪`)
+        : el('div', { class: 'goal-remaining done' }, '🎉 הגעת ליעד!'),
+    ));
+    card.appendChild(el('div', { class: 'goal-actions' },
+      el('button', { class: 'btn btn-primary btn-sm', onclick: () => openContribModal(g) }, '+ הפקדה'),
+      el('button', { class: 'btn btn-secondary btn-sm', onclick: () => openGoalModal(g) }, 'עריכה'),
+    ));
+    list.appendChild(card);
+  });
+}
+
+function openGoalModal(goal) {
+  const isEdit = !!goal;
+  const form = el('form');
+  const nameInp = el('input', { class: 'input', required: true, value: goal?.name || '', placeholder: 'לדוגמה: טיסה לחו"ל' });
+  const iconInp = el('input', { class: 'input', value: goal?.icon || '🎯', maxlength: 4 });
+  const targetInp = el('input', { class: 'input', type: 'number', step: '1', required: true, value: goal?.target || 0, placeholder: '0' });
+  const deadlineInp = el('input', { class: 'input', type: 'date', value: goal?.deadline ? fmt.dateInput(goal.deadline) : '' });
+  const notesInp = el('textarea', { class: 'input', rows: 2, placeholder: 'הערות' });
+  notesInp.value = goal?.notes || '';
+
+  let contribSection = null;
+  if (isEdit && goal.contributions && goal.contributions.length > 0) {
+    contribSection = el('div', { style: 'border-top: 1px solid var(--border); padding-top: 12px;' });
+    contribSection.appendChild(el('div', { style: 'font-size: 13px; font-weight: 700; margin-bottom: 8px;' }, 'הפקדות'));
+    const ul = el('div', { class: 'payments-list' });
+    goal.contributions.slice().sort((a,b) => (b.date||0) - (a.date||0)).forEach(c => {
+      ul.appendChild(el('div', { class: 'payment-row' },
+        el('div', {},
+          el('div', { class: 'pay-amt' }, fmt.money(c.amount)),
+          el('div', { class: 'pay-date' }, fmt.date(c.date)),
+        ),
+        el('div', { style: 'font-size: 12.5px; color: var(--text-2);' }, c.notes || ''),
+        el('div', {}),
+        el('button', { type: 'button', class: 'pay-del', onclick: () => {
+          db.deleteContribution(goal.id, c.id);
+          toast('ההפקדה נמחקה');
+          closeModal();
+          openGoalModal(db.getGoals().find(x => x.id === goal.id));
+        } },
+          el('svg', { viewBox: '0 0 24 24', width: 12, height: 12, html: '<path fill="currentColor" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>' })),
+      ));
+    });
+    contribSection.appendChild(ul);
+  }
+
+  const footer = [
+    el('button', { type: 'button', class: 'btn btn-secondary', onclick: closeModal }, 'ביטול'),
+  ];
+  if (isEdit) {
+    footer.unshift(el('button', { type: 'button', class: 'btn btn-danger', onclick: async () => {
+      closeModal();
+      const ok = await confirmDialog({ title: 'מחיקת יעד', message: `למחוק את "${goal.name}"?`, confirmLabel: 'מחק', danger: true });
+      if (!ok) { openGoalModal(goal); return; }
+      db.deleteGoal(goal.id);
+      toast('היעד נמחק');
+      renderGoals();
+    } }, 'מחק'));
+  }
+  footer.push(el('button', { type: 'submit', class: 'btn btn-primary' }, isEdit ? 'עדכן' : 'הוסף'));
+
+  form.append(
+    field('שם היעד', nameInp),
+    twoCol(field('אימוג׳י', iconInp), field('סכום יעד (₪)', targetInp)),
+    field('תאריך יעד (אופציונלי)', deadlineInp),
+    field('הערות', notesInp),
+    contribSection,
+    el('div', { class: 'modal-footer' }, ...footer),
+  );
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const data = {
+      name: nameInp.value.trim(),
+      icon: iconInp.value.trim() || '🎯',
+      target: Number(targetInp.value) || 0,
+      deadline: deadlineInp.value ? new Date(deadlineInp.value).getTime() : null,
+      notes: notesInp.value.trim(),
+    };
+    if (isEdit) {
+      db.updateGoal(goal.id, data);
+      toast('היעד עודכן', 'success');
+    } else {
+      db.addGoal(data);
+      toast('היעד נוסף', 'success');
+    }
+    closeModal();
+    renderGoals();
+  });
+
+  openModal({ title: isEdit ? 'עריכת יעד' : 'יעד חדש', body: form });
+  nameInp.focus();
+}
+
+function openContribModal(goal) {
+  const form = el('form');
+  const amountInp = el('input', { class: 'input', type: 'number', step: '0.01', required: true, value: '', placeholder: '0' });
+  const dateInp = el('input', { class: 'input', type: 'date', value: fmt.dateInput(Date.now()) });
+  const notesInp = el('textarea', { class: 'input', rows: 2, placeholder: 'הערות' });
+
+  form.append(
+    field(`כמה הופקד ליעד "${goal.name}"?`, amountInp),
+    field('תאריך', dateInp),
+    field('הערות', notesInp),
+    el('div', { class: 'modal-footer' },
+      el('button', { type: 'button', class: 'btn btn-secondary', onclick: closeModal }, 'ביטול'),
+      el('button', { type: 'submit', class: 'btn btn-primary' }, 'הוסף הפקדה'),
+    ),
+  );
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    db.addContribution(goal.id, {
+      amount: Number(amountInp.value) || 0,
+      date: dateInp.value ? new Date(dateInp.value).getTime() : Date.now(),
+      notes: notesInp.value.trim(),
+    });
+    closeModal();
+    toast('הפקדה נוספה ליעד 🎯', 'success');
+    renderGoals();
+  });
+  openModal({ title: '+ הפקדה', body: form });
+  amountInp.focus();
+}
+
+/* ===========================================================
+   Settings: Backup / Restore / Tithe report
+   =========================================================== */
+function renderSettings() {
+  renderTitheReport();
+}
+
+function renderTitheReport() {
+  const container = $('#tithe-report');
+  container.innerHTML = '';
+  const period = state.period;
+  const incomes = db.getIncome().filter(i => inPeriod(i.date || i.createdAt, period));
+  const total = incomes.reduce((s, i) => s + (Number(i.amount) || 0), 0);
+  const tithe = total * 0.1;
+  const titheSet = incomes.filter(i => i.titheSet).reduce((s, i) => s + ((Number(i.amount) || 0) * 0.1), 0);
+  const titheNotSet = Math.max(0, tithe - titheSet);
+
+  container.appendChild(renderPeriodFilter(period, (p) => { state.period = p; renderSettings(); renderDashboard(); }));
+  container.appendChild(el('div', { class: 'tithe-summary' },
+    titheRow('סה"כ הכנסות בתקופה', fmt.money(total), 'income'),
+    titheRow('חובת מעשר (10%)', fmt.money(tithe), 'planned'),
+    titheRow('הופרש בפועל', fmt.money(titheSet), 'success'),
+    titheRow('נותר להפריש', fmt.money(titheNotSet), titheNotSet > 0 ? 'warning' : 'success'),
+  ));
+
+  if (incomes.length > 0) {
+    container.appendChild(el('div', { style: 'margin-top: 14px; font-size: 13px; font-weight: 700;' }, 'פירוט'));
+    const ul = el('div', { class: 'tithe-list' });
+    incomes.forEach(i => {
+      const t = (Number(i.amount) || 0) * 0.1;
+      ul.appendChild(el('div', { class: 'tithe-row' + (i.titheSet ? ' done' : '') },
+        el('div', { class: 'name' }, i.source || 'הכנסה'),
+        el('div', { class: 'date' }, fmt.date(i.date || i.createdAt)),
+        el('div', { class: 'amt' }, fmt.money(t)),
+        el('div', {}, i.titheSet ? '✓ הופרש' : '○ פתוח'),
+      ));
+    });
+    container.appendChild(ul);
+  }
+}
+
+function titheRow(label, value, kind) {
+  return el('div', { class: 'tithe-summary-row ' + (kind || '') },
+    el('span', { class: 'label' }, label),
+    el('strong', {}, value),
+  );
+}
+
+async function exportBackup() {
+  const data = db.exportAll();
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const today = new Date().toISOString().slice(0, 10);
+  a.href = url;
+  a.download = `heller-backup-${data.user}-${today}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast('הגיבוי הורד 💾', 'success');
+}
+
+async function importBackup(e) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  e.target.value = '';
+  try {
+    const text = await file.text();
+    const payload = JSON.parse(text);
+    const ok = await confirmDialog({
+      title: 'שחזור מגיבוי',
+      message: `שחזור יחליף את כל הנתונים הנוכחיים שלך עם הנתונים מהקובץ "${file.name}". להמשיך?`,
+      confirmLabel: 'שחזר',
+      danger: true,
+    });
+    if (!ok) return;
+    db.importAll(payload);
+    toast('הנתונים שוחזרו 🎉', 'success');
+    renderAll();
+  } catch (err) {
+    toast('שגיאה בקריאת הקובץ: ' + err.message, 'error');
+  }
 }

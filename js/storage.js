@@ -108,6 +108,7 @@ function initUserData(username) {
   // Weekly & Income empty
   write(username, 'weekly', []);
   write(username, 'income', []);
+  write(username, 'goals', []);
 }
 
 // Merge defaults from Excel into user's budget without losing user data.
@@ -355,6 +356,77 @@ export const db = {
   },
   deleteIncome(id) {
     this.setIncome(this.getIncome().filter(i => i.id !== id));
+  },
+
+  // Goals (savings tracker)
+  getGoals() { return read(currentUser(), 'goals', []); },
+  setGoals(list) { write(currentUser(), 'goals', list); },
+  addGoal(goal) {
+    const list = this.getGoals();
+    goal.id = uuid();
+    goal.createdAt = Date.now();
+    goal.contributions = goal.contributions || [];
+    list.push(goal);
+    this.setGoals(list);
+    return goal;
+  },
+  updateGoal(id, patch) {
+    const list = this.getGoals();
+    const idx = list.findIndex(g => g.id === id);
+    if (idx > -1) {
+      list[idx] = { ...list[idx], ...patch };
+      this.setGoals(list);
+      return list[idx];
+    }
+  },
+  deleteGoal(id) {
+    this.setGoals(this.getGoals().filter(g => g.id !== id));
+  },
+  addContribution(goalId, contrib) {
+    const list = this.getGoals();
+    const g = list.find(g => g.id === goalId);
+    if (!g) return;
+    contrib.id = uuid();
+    if (!contrib.date) contrib.date = Date.now();
+    g.contributions = g.contributions || [];
+    g.contributions.push(contrib);
+    this.setGoals(list);
+  },
+  deleteContribution(goalId, contribId) {
+    const list = this.getGoals();
+    const g = list.find(g => g.id === goalId);
+    if (!g || !g.contributions) return;
+    g.contributions = g.contributions.filter(c => c.id !== contribId);
+    this.setGoals(list);
+  },
+
+  // ===== Backup / Restore =====
+  exportAll() {
+    const u = currentUser();
+    return {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      user: u,
+      data: {
+        shopping: this.getItems(),
+        budget: this.getBudget(),
+        productCategories: this.getProductCategories(),
+        weekly: this.getWeekly(),
+        income: this.getIncome(),
+        goals: this.getGoals(),
+      },
+    };
+  },
+  importAll(payload) {
+    if (!payload || !payload.data) throw new Error('קובץ לא תקין');
+    const u = currentUser();
+    const d = payload.data;
+    if (Array.isArray(d.shopping)) write(u, 'shopping', d.shopping);
+    if (Array.isArray(d.budget)) write(u, 'budget', d.budget);
+    if (Array.isArray(d.productCategories)) write(u, 'productCategories', d.productCategories);
+    if (Array.isArray(d.weekly)) write(u, 'weekly', d.weekly);
+    if (Array.isArray(d.income)) write(u, 'income', d.income);
+    if (Array.isArray(d.goals)) write(u, 'goals', d.goals);
   },
 };
 
