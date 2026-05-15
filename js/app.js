@@ -1,5 +1,5 @@
 // Main application controller
-import { db, registerUser, loginUser, getSession, clearSession } from './storage.js';
+import { db, registerUser, loginUser, getSession, clearSession, mergeBudgetDefaults } from './storage.js';
 import { UNITS, INCOME_SOURCES } from './data.js';
 import { fmt, $, $$, el, toast, openModal, closeModal, confirmDialog, getCategoryMeta, categorySwatch } from './ui.js';
 
@@ -115,6 +115,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
   $('#new-weekly').addEventListener('click', () => openWeeklyModal());
   $('#add-budget-cat').addEventListener('click', () => openBudgetCategoryModal());
+  $('#sync-budget-defaults').addEventListener('click', async () => {
+    const ok = await confirmDialog({
+      title: 'השלמת קטגוריות מהאקסל',
+      message: 'הפעולה תוסיף את כל הקטגוריות והסעיפים מהאקסל שעדיין לא קיימים אצלך. סעיפים שכבר קיימים — לא ישתנו.',
+      confirmLabel: 'השלם',
+    });
+    if (!ok) return;
+    const { addedCats, addedItems } = mergeBudgetDefaults();
+    if (addedCats === 0 && addedItems === 0) {
+      toast('הכל מעודכן — אין מה להוסיף');
+    } else {
+      toast(`נוספו ${addedCats} קטגוריות ו-${addedItems} סעיפים`, 'success');
+    }
+    renderBudget();
+    renderDashboard();
+  });
   $('#add-income').addEventListener('click', () => openIncomeModal());
   $('#add-product-category').addEventListener('click', () => openProductCategoryModal());
 });
@@ -809,6 +825,10 @@ function openWeeklyDetail(w) {
 
   function refresh() {
     body.innerHTML = '';
+    body.appendChild(el('div', { class: 'isolation-notice' },
+      el('svg', { viewBox: '0 0 24 24', width: 16, height: 16, html: '<path fill="currentColor" d="M11 9h2V7h-2v2zm1 11c-4.4 0-8-3.6-8-8s3.6-8 8-8 8 3.6 8 8-3.6 8-8 8zm0-18C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm-1 15h2v-6h-2v6z"/>' }),
+      el('span', {}, 'שינויים בקנייה הזו לא משפיעים על רשימת הקניות הקבועה')
+    ));
     const list = el('div', { class: 'weekly-detail-items' });
     if ((currentWeek.items || []).length === 0) {
       list.appendChild(emptyState('🛒', 'אין פריטים', 'הוסף פריטים מהרשימה או מוצר חדש'));

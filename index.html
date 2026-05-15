@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&family=Rubik:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/styles.css?v=4" />
+  <link rel="stylesheet" href="css/styles.css?v=5" />
 </head>
 <body>
 
@@ -275,10 +275,16 @@
             <h2>תקציב חודשי</h2>
             <p class="page-sub">סה"כ של כל קטגוריה מסונכרן עם רשימת הקניות</p>
           </div>
-          <button class="btn btn-primary" id="add-budget-cat">
-            <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"/></svg>
-            הוסף קטגוריה
-          </button>
+          <div class="header-actions">
+            <button class="btn btn-secondary" id="sync-budget-defaults" title="השלמת קטגוריות חסרות מהאקסל">
+              <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M17.65 6.35A7.95 7.95 0 0012 4a8 8 0 108 8h-2a6 6 0 11-6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+              השלם מהאקסל
+            </button>
+            <button class="btn btn-primary" id="add-budget-cat">
+              <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"/></svg>
+              הוסף קטגוריה
+            </button>
+          </div>
         </div>
 
         <div class="budget-summary glass">
@@ -383,6 +389,6 @@
   <!-- ===== Toast ===== -->
   <div id="toast" class="toast"></div>
 
-  <script type="module" src="js/app.js?v=4"></script>
+  <script type="module" src="js/app.js?v=5"></script>
 </body>
 </html>

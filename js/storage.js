@@ -110,12 +110,53 @@ function initUserData(username) {
   write(username, 'income', []);
 }
 
+// Merge defaults from Excel into user's budget without losing user data.
+// - Adds missing top-level categories.
+// - For each existing category, adds missing items (matched by name).
+export function mergeBudgetDefaults() {
+  const username = currentUserName();
+  const existing = read(username, 'budget', []);
+  const byName = new Map(existing.map(c => [c.name, c]));
+  let addedCats = 0, addedItems = 0;
+
+  DEFAULT_BUDGET_CATEGORIES.forEach(def => {
+    const cur = byName.get(def.name);
+    if (!cur) {
+      const fresh = {
+        ...def,
+        id: uuid(),
+        items: (def.items || []).map(i => ({ ...i, id: uuid() })),
+      };
+      existing.push(fresh);
+      addedCats++;
+      addedItems += fresh.items.length;
+    } else {
+      const itemNames = new Set((cur.items || []).map(i => i.name));
+      (def.items || []).forEach(i => {
+        if (!itemNames.has(i.name)) {
+          cur.items = cur.items || [];
+          cur.items.push({ ...i, id: uuid() });
+          addedItems++;
+        }
+      });
+      // Backfill icon/color/linkedToShopping if missing
+      if (def.icon && !cur.icon) cur.icon = def.icon;
+      if (def.color && !cur.color) cur.color = def.color;
+      if (def.linkedToShopping && cur.linkedToShopping == null) cur.linkedToShopping = true;
+    }
+  });
+
+  write(username, 'budget', existing);
+  return { addedCats, addedItems };
+}
+
 /* --------- Data accessors (current session) --------- */
 function currentUser() {
   const u = getSession();
   if (!u) throw new Error('לא מחובר');
   return u.username;
 }
+const currentUserName = currentUser;
 
 export const db = {
   // Shopping items
