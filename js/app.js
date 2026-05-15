@@ -1,5 +1,5 @@
 // Main application controller
-import { db, registerUser, loginUser, getSession, clearSession, mergeBudgetDefaults, periodRange, inPeriod, plannedMultiplier, periodLabel } from './storage.js';
+import { db, registerUser, loginUser, getSession, clearSession, mergeBudgetDefaults, periodRange, inPeriod, plannedMultiplier, periodLabel, daysUntilDueDay, paidThisMonth } from './storage.js';
 import { UNITS, INCOME_SOURCES } from './data.js';
 import { fmt, $, $$, el, toast, openModal, closeModal, confirmDialog, getCategoryMeta, categorySwatch, renderPeriodFilter } from './ui.js';
 
@@ -59,10 +59,12 @@ const state = {
 function showAuth() {
   $('#auth-screen').classList.remove('hidden');
   $('#app').classList.add('hidden');
+  $('#fab-container')?.classList.add('hidden');
 }
 function showApp() {
   $('#auth-screen').classList.add('hidden');
   $('#app').classList.remove('hidden');
+  $('#fab-container')?.classList.remove('hidden');
   renderAll();
 }
 
@@ -186,6 +188,24 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#add-income').addEventListener('click', () => openIncomeModal());
   $('#add-product-category').addEventListener('click', () => openProductCategoryModal());
   $('#add-goal').addEventListener('click', () => openGoalModal());
+
+  // FAB (floating action button)
+  $('#fab').addEventListener('click', () => {
+    $('#fab-container').classList.toggle('open');
+  });
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('#fab-container')) return;
+    $('#fab-container')?.classList.remove('open');
+  });
+  $$('.fab-action').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const what = btn.dataset.quick;
+      $('#fab-container').classList.remove('open');
+      if (what === 'expense') openQuickExpenseModal();
+      else if (what === 'income') openIncomeModal();
+      else if (what === 'weekly') openWeeklyModal();
+    });
+  });
 
   // Settings: backup / restore
   $('#export-data').addEventListener('click', exportBackup);
@@ -354,6 +374,10 @@ function renderDashboard() {
       el('div', { class: 'amount positive' }, fmt.money(grand)),
     ));
   }
+
+  // Monthly trend (6 months) + Due bills
+  renderMonthlyTrend();
+  renderDueBills();
 
   // Recent incomes (in period)
   const incEl = $('#recent-incomes');
@@ -788,9 +812,25 @@ function renderBudget() {
     (cat.items || []).forEach(item => {
       const itemPlanned = (Number(item.amount) || 0) * plannedMultiplier(period);
       const itemActual = actualForItem(item, period);
+      const isPaid = paidThisMonth(item);
+      const daysToDue = item.recurring && item.dueDay ? daysUntilDueDay(item.dueDay) : null;
 
-      const row = el('div', { class: 'budget-item-row' },
-        el('span', { class: 'name' }, item.name),
+      // Build name with badges
+      const nameCell = el('span', { class: 'name' }, item.name);
+      if (item.recurring) {
+        if (isPaid) {
+          nameCell.appendChild(el('span', { class: 'item-badge paid' }, '✓ שולם'));
+        } else if (daysToDue != null) {
+          let badgeClass = 'due';
+          let text = `📅 בעוד ${daysToDue} ימים`;
+          if (daysToDue === 0) { badgeClass = 'due-now'; text = '⚠️ היום!'; }
+          else if (daysToDue <= 3) { badgeClass = 'due-soon'; text = `⚠️ בעוד ${daysToDue} ימים`; }
+          nameCell.appendChild(el('span', { class: 'item-badge ' + badgeClass }, text));
+        }
+      }
+
+      const row = el('div', { class: 'budget-item-row' + (isPaid ? ' paid' : '') },
+        nameCell,
         el('span', { class: 'amounts' },
           el('span', { class: 'planned-amt' }, fmt.money(itemPlanned)),
           el('span', { class: 'actual-amt ' + progressClass(itemActual, itemPlanned) },
@@ -889,6 +929,9 @@ function openBudgetItemModal(cat, item) {
   const form = el('form');
   const nameInp = el('input', { class: 'input', required: true, value: item?.name || '', placeholder: 'לדוגמה: חשמל' });
   const amountInp = el('input', { class: 'input', type: 'number', step: '0.01', required: true, value: item?.amount || 0, placeholder: '0' });
+  const recurringChk = el('input', { type: 'checkbox' });
+  if (item?.recurring) recurringChk.checked = true;
+  const dueDayInp = el('input', { class: 'input', type: 'number', min: 1, max: 31, step: 1, value: item?.dueDay || '', placeholder: '1-31' });
 
   // Payments section (only for existing items)
   let paymentsSection = null;
@@ -946,13 +989,20 @@ function openBudgetItemModal(cat, item) {
   form.append(
     field('שם סעיף', nameInp),
     field('סכום מתוכנן חודשי (₪)', amountInp),
+    el('label', { class: 'checkbox-row' }, recurringChk, el('span', {}, '🔁 חוזר כל חודש (חשבון קבוע)')),
+    field('יום בחודש לתשלום (אופציונלי)', dueDayInp),
     paymentsSection,
     el('div', { class: 'modal-footer' }, ...footerButtons),
   );
 
   form.addEventListener('submit', (e) => {
     e.preventDefault();
-    const data = { name: nameInp.value.trim(), amount: Number(amountInp.value) || 0 };
+    const data = {
+      name: nameInp.value.trim(),
+      amount: Number(amountInp.value) || 0,
+      recurring: recurringChk.checked,
+      dueDay: dueDayInp.value ? Number(dueDayInp.value) : null,
+    };
     if (isEdit) {
       db.updateBudgetItem(cat.id, item.id, data);
       toast('הסעיף עודכן', 'success');
@@ -1851,4 +1901,207 @@ async function importBackup(e) {
   } catch (err) {
     toast('שגיאה בקריאת הקובץ: ' + err.message, 'error');
   }
+}
+
+/* ===========================================================
+   Quick expense (from FAB)
+   =========================================================== */
+function openQuickExpenseModal() {
+  const cats = db.getBudget();
+  if (cats.length === 0) {
+    toast('הוסף קודם קטגוריה בעמוד התקציב', 'error');
+    return;
+  }
+
+  const form = el('form');
+  const catSel = el('select', { class: 'select', required: true },
+    ...cats.map(c => el('option', { value: c.id }, `${c.icon || ''} ${c.name}`))
+  );
+  // Item dropdown - changes when category changes
+  const itemSel = el('select', { class: 'select', required: true });
+  const newItemInp = el('input', { class: 'input', placeholder: 'או הקלד שם סעיף חדש' });
+  function refreshItems() {
+    const cat = cats.find(c => c.id === catSel.value);
+    itemSel.innerHTML = '';
+    (cat?.items || []).forEach(i => {
+      itemSel.appendChild(el('option', { value: i.id }, i.name));
+    });
+    if ((cat?.items || []).length === 0) {
+      itemSel.appendChild(el('option', { value: '' }, '— אין סעיפים, הוסף חדש למטה —'));
+      itemSel.disabled = true;
+    } else {
+      itemSel.appendChild(el('option', { value: '__new__' }, '+ סעיף חדש'));
+      itemSel.disabled = false;
+    }
+  }
+  catSel.addEventListener('change', refreshItems);
+  refreshItems();
+
+  const amountInp = el('input', { class: 'input', type: 'number', step: '0.01', required: true, placeholder: '0' });
+  const dateInp = el('input', { class: 'input', type: 'date', value: fmt.dateInput(Date.now()) });
+  const notesInp = el('textarea', { class: 'input', rows: 2, placeholder: 'הערות' });
+
+  form.append(
+    field('קטגוריה', catSel),
+    field('סעיף', itemSel),
+    field('או סעיף חדש', newItemInp),
+    field('סכום (₪)', amountInp),
+    field('תאריך', dateInp),
+    field('הערות', notesInp),
+    el('div', { class: 'modal-footer' },
+      el('button', { type: 'button', class: 'btn btn-secondary', onclick: closeModal }, 'ביטול'),
+      el('button', { type: 'submit', class: 'btn btn-primary' }, 'הוסף הוצאה'),
+    ),
+  );
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const catId = catSel.value;
+    let itemId = itemSel.value;
+    const newName = newItemInp.value.trim();
+
+    // If user typed a new item name OR chose "+ סעיף חדש"
+    if (newName || itemId === '__new__') {
+      const name = newName || prompt('שם הסעיף החדש:');
+      if (!name) return;
+      // Create item via db
+      const fresh = { name, amount: 0 };
+      db.addBudgetItem(catId, fresh);
+      // Find the newly created item
+      const cat = db.getBudget().find(c => c.id === catId);
+      const created = cat.items[cat.items.length - 1];
+      itemId = created.id;
+    }
+
+    if (!itemId || itemId === '__new__') {
+      toast('בחר סעיף', 'error');
+      return;
+    }
+
+    db.addPayment(catId, itemId, {
+      amount: Number(amountInp.value) || 0,
+      date: dateInp.value ? new Date(dateInp.value).getTime() : Date.now(),
+      notes: notesInp.value.trim(),
+    });
+    closeModal();
+    toast('ההוצאה נרשמה ✓', 'success');
+    renderCurrent();
+  });
+
+  openModal({ title: '💸 הוצאה מהירה', body: form });
+  amountInp.focus();
+}
+
+/* ===========================================================
+   Monthly trend chart on dashboard
+   =========================================================== */
+function renderMonthlyTrend() {
+  const container = $('#monthly-trend');
+  if (!container) return;
+  container.innerHTML = '';
+
+  const now = new Date();
+  const months = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const start = d.getTime();
+    const end = new Date(d.getFullYear(), d.getMonth() + 1, 1).getTime() - 1;
+    months.push({
+      label: ['ינו', 'פבר', 'מרץ', 'אפר', 'מאי', 'יונ', 'יול', 'אוג', 'ספט', 'אוק', 'נוב', 'דצמ'][d.getMonth()],
+      year: d.getFullYear(),
+      start, end,
+    });
+  }
+
+  // Compute income + expenses per month
+  const allIncomes = db.getIncome();
+  const allWeekly = db.getWeekly();
+  const allBudget = db.getBudget();
+  let maxVal = 1;
+  const computed = months.map(m => {
+    const period = { type: 'custom', start: m.start, end: m.end };
+    const income = allIncomes.filter(i => inPeriod(i.date || i.createdAt, period))
+                             .reduce((s, i) => s + (Number(i.amount) || 0), 0);
+    const weekly = allWeekly.filter(w => inPeriod(w.createdAt, period))
+                            .reduce((s, w) => s + weeklyTotal(w), 0);
+    const payments = allBudget.reduce((s, c) => s + (c.items || []).reduce((ss, it) => {
+      return ss + (it.payments || []).filter(p => inPeriod(p.date, period)).reduce((sss, p) => sss + (Number(p.amount) || 0), 0);
+    }, 0), 0);
+    const expenses = weekly + payments;
+    maxVal = Math.max(maxVal, income, expenses);
+    return { ...m, income, expenses };
+  });
+
+  computed.forEach(m => {
+    const incomeH = (m.income / maxVal) * 100;
+    const expenseH = (m.expenses / maxVal) * 100;
+    container.appendChild(el('div', { class: 'month-col' },
+      el('div', { class: 'bars-vertical' },
+        el('div', {
+          class: 'bar income',
+          style: { height: incomeH + '%' },
+          title: 'הכנסות: ' + fmt.money(m.income),
+        }),
+        el('div', {
+          class: 'bar expense',
+          style: { height: expenseH + '%' },
+          title: 'הוצאות: ' + fmt.money(m.expenses),
+        }),
+      ),
+      el('div', { class: 'month-label' }, m.label),
+    ));
+  });
+
+  // Legend
+  const legend = $('#monthly-trend-legend');
+  if (legend) {
+    legend.innerHTML = '';
+    legend.appendChild(el('span', { class: 'legend-item' }, el('span', { class: 'dot income' }), 'הכנסות'));
+    legend.appendChild(el('span', { class: 'legend-item' }, el('span', { class: 'dot expense' }), 'הוצאות'));
+  }
+}
+
+function renderDueBills() {
+  const container = $('#due-bills');
+  if (!container) return;
+  container.innerHTML = '';
+  const cats = db.getBudget();
+  const bills = [];
+  cats.forEach(cat => {
+    (cat.items || []).forEach(item => {
+      if (!item.recurring || !item.dueDay) return;
+      if (paidThisMonth(item)) return; // already paid
+      const days = daysUntilDueDay(item.dueDay);
+      bills.push({ cat, item, days });
+    });
+  });
+  bills.sort((a, b) => a.days - b.days);
+
+  // Show only bills due in <= 14 days
+  const urgent = bills.filter(b => b.days <= 14);
+  if (urgent.length === 0) {
+    container.parentElement.style.display = 'none';
+    return;
+  }
+  container.parentElement.style.display = '';
+
+  urgent.forEach(({ cat, item, days }) => {
+    let cls = 'due-bill';
+    let text = `בעוד ${days} ימים`;
+    if (days === 0) { cls += ' due-now'; text = '⚠️ היום!'; }
+    else if (days <= 3) { cls += ' due-soon'; text = `⚠️ בעוד ${days} ימים`; }
+    container.appendChild(el('div', {
+      class: cls,
+      onclick: () => openBudgetItemModal(cat, item),
+    },
+      el('div', { class: 'left' },
+        el('div', { class: 'name' }, `${cat.icon || '📦'} ${item.name}`),
+        el('div', { class: 'meta' }, `${cat.name} • יום ${item.dueDay} בחודש`),
+      ),
+      el('div', { class: 'right' },
+        el('div', { class: 'days' }, text),
+        el('div', { class: 'amt' }, fmt.money(item.amount)),
+      ),
+    ));
+  });
 }

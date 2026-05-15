@@ -1655,6 +1655,187 @@ select option { background: var(--bg-2); color: var(--text); }
   padding-top: 6px;
 }
 
+/* -------- Floating Action Button (FAB) -------- */
+.fab-container {
+  position: fixed;
+  bottom: calc(var(--bottom-nav-h) + var(--sa-bottom) + 16px);
+  inset-inline-start: 16px;
+  z-index: 70;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: flex-start;
+  gap: 10px;
+}
+@media (min-width: 761px) {
+  .fab-container { bottom: 24px; inset-inline-start: 24px; }
+}
+.fab {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  background: var(--grad-primary);
+  border: none;
+  color: white;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 8px 24px rgba(124, 92, 255, 0.5);
+  transition: var(--t-mid);
+  cursor: pointer;
+}
+.fab:hover { transform: scale(1.05); box-shadow: 0 12px 30px rgba(124, 92, 255, 0.65); }
+.fab:active { transform: scale(0.95); }
+.fab-container.open .fab { transform: rotate(45deg); }
+.fab-container.open .fab:hover { transform: rotate(45deg) scale(1.05); }
+.fab-menu {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 10px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(8px);
+  transition: var(--t-mid);
+}
+.fab-container.open .fab-menu {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+.fab-action {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px 8px 8px;
+  background: rgba(20, 20, 40, 0.95);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-strong);
+  border-radius: 30px;
+  color: var(--text);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  transition: var(--t-fast);
+  white-space: nowrap;
+}
+.fab-action:hover { background: rgba(35, 35, 60, 1); transform: translateX(-3px); }
+.fab-action-label { order: 1; }
+.fab-action-icon {
+  order: 2;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+}
+.fab-action-icon.expense { background: rgba(239, 68, 68, 0.18); }
+.fab-action-icon.income { background: rgba(16, 185, 129, 0.18); }
+.fab-action-icon.weekly { background: rgba(124, 92, 255, 0.18); }
+
+/* -------- Item badges (recurring / paid) -------- */
+.item-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-inline-start: 8px;
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 6px;
+  vertical-align: middle;
+}
+.item-badge.paid { background: rgba(16, 185, 129, 0.16); color: #34d399; }
+.item-badge.due { background: var(--surface-3); color: var(--text-2); }
+.item-badge.due-soon { background: rgba(245, 158, 11, 0.18); color: #fbbf24; }
+.item-badge.due-now { background: rgba(239, 68, 68, 0.2); color: #fca5a5; animation: pulse 2s infinite; }
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+.budget-item-row.paid { opacity: 0.6; }
+.budget-item-row.paid .name { text-decoration: line-through; text-decoration-color: var(--text-3); }
+
+/* -------- Monthly trend chart -------- */
+.monthly-trend {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+  height: 160px;
+  align-items: end;
+  padding-top: 12px;
+}
+.month-col {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 6px;
+}
+.bars-vertical {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+  align-items: end;
+  flex: 1;
+}
+.bars-vertical .bar {
+  width: 14px;
+  min-height: 4px;
+  border-radius: 4px 4px 0 0;
+  transition: height .6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.bars-vertical .bar.income { background: linear-gradient(180deg, #34d399, #22d3ee); }
+.bars-vertical .bar.expense { background: linear-gradient(180deg, #fbbf24, #f87171); }
+.month-label {
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-3);
+  font-weight: 600;
+}
+.legend {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--text-3);
+}
+.legend-item { display: inline-flex; align-items: center; gap: 5px; }
+.legend .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  display: inline-block;
+}
+.legend .dot.income { background: linear-gradient(180deg, #34d399, #22d3ee); }
+.legend .dot.expense { background: linear-gradient(180deg, #fbbf24, #f87171); }
+
+/* -------- Due bills list (dashboard) -------- */
+.due-bills-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.due-bill {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: var(--t-fast);
+}
+.due-bill:hover { background: var(--surface-3); transform: translateY(-1px); }
+.due-bill.due-soon { border-color: rgba(245, 158, 11, 0.4); background: rgba(245, 158, 11, 0.08); }
+.due-bill.due-now { border-color: rgba(239, 68, 68, 0.5); background: rgba(239, 68, 68, 0.1); animation: pulse 2.5s infinite; }
+.due-bill .left { min-width: 0; }
+.due-bill .name { font-weight: 700; font-size: 14px; }
+.due-bill .meta { font-size: 11.5px; color: var(--text-3); margin-top: 2px; }
+.due-bill .right { text-align: end; }
+.due-bill .days { font-size: 12.5px; font-weight: 700; color: var(--warning); }
+.due-bill.due-now .days { color: #fca5a5; }
+.due-bill .amt { font-size: 13.5px; font-weight: 700; color: var(--accent); margin-top: 2px; }
+
 /* -------- Install banner (PWA) -------- */
 .install-banner {
   position: fixed;

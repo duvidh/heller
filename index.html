@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&family=Rubik:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/styles.css?v=7" />
+  <link rel="stylesheet" href="css/styles.css?v=8" />
 </head>
 <body>
 
@@ -197,6 +197,21 @@
               <div class="stat-meta" id="stat-tithe-meta"></div>
             </div>
           </div>
+        </div>
+
+        <div class="dashboard-card glass" style="margin-bottom: 16px;">
+          <div class="card-header">
+            <h3>מגמה חודשית — 6 חודשים אחרונים</h3>
+            <div id="monthly-trend-legend" class="legend"></div>
+          </div>
+          <div id="monthly-trend" class="monthly-trend"></div>
+        </div>
+
+        <div class="dashboard-card glass" style="margin-bottom: 16px;">
+          <div class="card-header">
+            <h3>⚠️ חשבונות שצריך לשלם</h3>
+          </div>
+          <div id="due-bills" class="due-bills-list"></div>
         </div>
 
         <div class="dashboard-grid">
@@ -483,9 +498,30 @@
     </div>
   </div>
 
+  <!-- ===== Floating Action Button ===== -->
+  <div class="fab-container" id="fab-container">
+    <div class="fab-menu" id="fab-menu">
+      <button class="fab-action" data-quick="expense">
+        <span class="fab-action-label">הוצאה</span>
+        <span class="fab-action-icon expense">💸</span>
+      </button>
+      <button class="fab-action" data-quick="income">
+        <span class="fab-action-label">הכנסה</span>
+        <span class="fab-action-icon income">💰</span>
+      </button>
+      <button class="fab-action" data-quick="weekly">
+        <span class="fab-action-label">קנייה שבועית</span>
+        <span class="fab-action-icon weekly">🛒</span>
+      </button>
+    </div>
+    <button class="fab" id="fab">
+      <svg viewBox="0 0 24 24" width="28" height="28"><path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"/></svg>
+    </button>
+  </div>
+
   <!-- ===== Toast ===== -->
   <div id="toast" class="toast"></div>
 
-  <script type="module" src="js/app.js?v=7"></script>
+  <script type="module" src="js/app.js?v=8"></script>
 </body>
 </html>

@@ -436,6 +436,31 @@ export { uuid };
 // Period shape:
 //   { type: 'currentMonth' | 'lastMonth' | 'currentYear' | 'all' | 'custom', start?, end? }
 
+// Compute days until next occurrence of a given day-of-month.
+// If dueDay = 15 and today is 12th → returns 3. If today is 18th → 27 days (next month).
+export function daysUntilDueDay(dueDay) {
+  if (!dueDay || dueDay < 1 || dueDay > 31) return null;
+  const now = new Date();
+  const thisMonth = new Date(now.getFullYear(), now.getMonth(), dueDay);
+  if (thisMonth.getDate() !== dueDay) {
+    // E.g. dueDay=31 in February — falls into next month, normalize to last day of month
+    thisMonth.setDate(0);
+  }
+  if (thisMonth.getTime() < now.setHours(0,0,0,0)) {
+    const next = new Date(now.getFullYear(), now.getMonth() + 1, dueDay);
+    if (next.getDate() !== dueDay) next.setDate(0);
+    return Math.round((next - new Date().setHours(0,0,0,0)) / (1000*60*60*24));
+  }
+  return Math.round((thisMonth - new Date().setHours(0,0,0,0)) / (1000*60*60*24));
+}
+
+// Has this item been "paid" in the current month?
+export function paidThisMonth(item) {
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+  return (item.payments || []).some(p => (p.date || 0) >= startOfMonth);
+}
+
 export function periodRange(period) {
   const now = new Date();
   if (period.type === 'currentMonth') {
