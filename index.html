@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes" />
+  <meta name="theme-color" content="#0a0a14" />
+  <meta name="description" content="מערכת ניהול תקציב ביתי - רבת משתתפים" />
+  <title>הלר • ניהול תקציב</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&family=Rubik:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+
+  <!-- ===== Auth Screen ===== -->
+  <div id="auth-screen" class="auth-screen">
+    <div class="auth-bg">
+      <div class="orb orb-1"></div>
+      <div class="orb orb-2"></div>
+      <div class="orb orb-3"></div>
+    </div>
+    <div class="auth-card glass">
+      <div class="auth-logo">
+        <div class="logo-icon">₪</div>
+        <h1>הלר</h1>
+        <p>ניהול תקציב משפחתי חכם</p>
+      </div>
+
+      <div class="auth-tabs">
+        <button class="auth-tab active" data-auth-tab="login">התחברות</button>
+        <button class="auth-tab" data-auth-tab="register">הרשמה</button>
+      </div>
+
+      <form id="login-form" class="auth-form active">
+        <div class="form-group">
+          <label>שם משתמש</label>
+          <input type="text" id="login-username" required autocomplete="username" />
+        </div>
+        <div class="form-group">
+          <label>סיסמה</label>
+          <input type="password" id="login-password" required autocomplete="current-password" />
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">
+          <span>התחבר</span>
+          <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M11 6l-1.4 1.4 4.6 4.6H4v2h10.2L9.6 18.6 11 20l7-7z"/></svg>
+        </button>
+        <p class="auth-hint">משתמש דמו: <code>demo</code> / סיסמה: <code>demo</code></p>
+      </form>
+
+      <form id="register-form" class="auth-form">
+        <div class="form-group">
+          <label>שם מלא</label>
+          <input type="text" id="register-name" required />
+        </div>
+        <div class="form-group">
+          <label>שם משתמש</label>
+          <input type="text" id="register-username" required />
+        </div>
+        <div class="form-group">
+          <label>סיסמה</label>
+          <input type="password" id="register-password" required minlength="4" />
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">
+          <span>הרשם</span>
+          <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"/></svg>
+        </button>
+      </form>
+
+      <div id="auth-error" class="auth-error"></div>
+    </div>
+  </div>
+
+  <!-- ===== Main App ===== -->
+  <div id="app" class="app hidden">
+
+    <!-- Sidebar (Desktop) -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="logo-icon small">₪</div>
+        <span class="sidebar-title">הלר</span>
+      </div>
+
+      <nav class="sidebar-nav">
+        <button class="nav-item active" data-tab="dashboard">
+          <svg viewBox="0 0 24 24"><path fill="currentColor" d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>
+          <span>לוח בקרה</span>
+        </button>
+        <button class="nav-item" data-tab="shopping">
+          <svg viewBox="0 0 24 24"><path fill="currentColor" d="M7 18c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.6-1.4 2.4c-.2.3-.2.7 0 1 .2.3.5.5.9.5h11v-2H7.4c-.1 0-.2-.1-.2-.2l1.2-2.1h7.5c.7 0 1.4-.4 1.7-1.1l3.6-6.5c.1-.2.1-.4 0-.6-.1-.2-.3-.3-.5-.3H5.2L4.3 2H1zm16 16c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
+          <span>רשימת קניות</span>
+        </button>
+        <button class="nav-item" data-tab="weekly">
+          <svg viewBox="0 0 24 24"><path fill="currentColor" d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 18H5V8h14v13z"/></svg>
+          <span>קניות שבועיות</span>
+        </button>
+        <button class="nav-item" data-tab="budget">
+          <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 1L3 5v6c0 5.5 3.8 10.7 9 12 5.2-1.3 9-6.5 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/></svg>
+          <span>תקציב חודשי</span>
+        </button>
+        <button class="nav-item" data-tab="income">
+          <svg viewBox="0 0 24 24"><path fill="currentColor" d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.42 0 2.13.54 2.39 1.4.12.4.45.7.87.7h.3c.66 0 1.13-.65.9-1.27-.42-1.18-1.4-2.16-2.96-2.54V4.5C12.94 3.67 12.27 3 11.43 3h-.01c-.84 0-1.51.67-1.51 1.51v1.66c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-1.65 0-2.5-.59-2.83-1.43-.15-.39-.49-.68-.9-.68h-.28c-.67 0-1.14.68-.89 1.3.57 1.39 1.9 2.21 3.4 2.53v1.67c0 .84.67 1.51 1.51 1.51h.01c.84 0 1.51-.67 1.51-1.51v-1.65c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z"/></svg>
+          <span>הכנסות</span>
+        </button>
+        <button class="nav-item" data-tab="categories">
+          <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2l-5.5 9h11L12 2zm0 3.84L13.93 9h-3.87L12 5.84zM17.5 13c-2.49 0-4.5 2.01-4.5 4.5s2.01 4.5 4.5 4.5 4.5-2.01 4.5-4.5-2.01-4.5-4.5-4.5zm0 7c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5zM3 21.5h8v-8H3v8zm2-6h4v4H5v-4z"/></svg>
+          <span>קטגוריות</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="user-badge">
+          <div class="avatar" id="user-avatar"></div>
+          <div class="user-info">
+            <div class="user-name" id="user-name"></div>
+            <div class="user-role">משתמש פעיל</div>
+          </div>
+        </div>
+        <button id="logout-btn" class="btn btn-ghost btn-sm" title="התנתק">
+          <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Mobile Header -->
+    <header class="mobile-header">
+      <button id="menu-btn" class="icon-btn">
+        <svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
+      </button>
+      <div class="mobile-title">
+        <div class="logo-icon small">₪</div>
+        <span id="mobile-page-title">לוח בקרה</span>
+      </div>
+      <button id="mobile-logout" class="icon-btn">
+        <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>
+      </button>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main">
+
+      <!-- ============== Dashboard ============== -->
+      <section class="page" id="page-dashboard">
+        <div class="page-header">
+          <div>
+            <h2>שלום, <span id="dashboard-greeting"></span> 👋</h2>
+            <p class="page-sub">ככה נראה התקציב שלך החודש</p>
+          </div>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-card glass">
+            <div class="stat-icon income"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M7 14l5-5 5 5z"/></svg></div>
+            <div class="stat-info">
+              <div class="stat-label">סה"כ הכנסות</div>
+              <div class="stat-value" id="stat-income">₪0</div>
+              <div class="stat-meta" id="stat-income-meta"></div>
+            </div>
+          </div>
+          <div class="stat-card glass">
+            <div class="stat-icon expense"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M7 10l5 5 5-5z"/></svg></div>
+            <div class="stat-info">
+              <div class="stat-label">סה"כ הוצאות (תקציב)</div>
+              <div class="stat-value" id="stat-budget">₪0</div>
+              <div class="stat-meta">תקציב חודשי משוער</div>
+            </div>
+          </div>
+          <div class="stat-card glass">
+            <div class="stat-icon balance"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg></div>
+            <div class="stat-info">
+              <div class="stat-label">יתרה משוערת</div>
+              <div class="stat-value" id="stat-balance">₪0</div>
+              <div class="stat-meta">הכנסות פחות הוצאות</div>
+            </div>
+          </div>
+          <div class="stat-card glass">
+            <div class="stat-icon tithe"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/></svg></div>
+            <div class="stat-info">
+              <div class="stat-label">מעשרות החודש</div>
+              <div class="stat-value" id="stat-tithe">₪0</div>
+              <div class="stat-meta" id="stat-tithe-meta"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="dashboard-grid">
+          <div class="dashboard-card glass">
+            <div class="card-header">
+              <h3>חלוקת תקציב לפי קטגוריות</h3>
+            </div>
+            <div id="budget-chart" class="budget-chart"></div>
+          </div>
+
+          <div class="dashboard-card glass">
+            <div class="card-header">
+              <h3>קניות שבועיות אחרונות</h3>
+              <button class="btn btn-ghost btn-sm" data-go="weekly">ראה הכל ←</button>
+            </div>
+            <div id="recent-weeklies" class="recent-list"></div>
+          </div>
+
+          <div class="dashboard-card glass full-width">
+            <div class="card-header">
+              <h3>הכנסות אחרונות</h3>
+              <button class="btn btn-ghost btn-sm" data-go="income">ראה הכל ←</button>
+            </div>
+            <div id="recent-incomes" class="recent-list"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============== Shopping List ============== -->
+      <section class="page hidden" id="page-shopping">
+        <div class="page-header">
+          <div>
+            <h2>רשימת קניות</h2>
+            <p class="page-sub">המוצרים הקבועים שלך מסווגים לפי קטגוריות</p>
+          </div>
+          <button class="btn btn-primary" id="add-shopping-item">
+            <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"/></svg>
+            הוסף מוצר
+          </button>
+        </div>
+
+        <div class="filters">
+          <div class="search-box">
+            <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 001.48-5.34c-.47-2.78-2.79-5-5.59-5.34a6.505 6.505 0 00-7.27 7.27c.34 2.8 2.56 5.12 5.34 5.59a6.5 6.5 0 005.34-1.48l.27.28v.79l4.25 4.25c.41.41 1.08.41 1.49 0 .41-.41.41-1.08 0-1.49L15.5 14zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+            <input type="text" id="shopping-search" placeholder="חיפוש מוצר..." />
+          </div>
+          <select id="shopping-filter-category" class="select">
+            <option value="">כל הקטגוריות</option>
+          </select>
+        </div>
+
+        <div class="category-totals" id="category-totals"></div>
+
+        <div id="shopping-list" class="shopping-list"></div>
+      </section>
+
+      <!-- ============== Weekly Shopping ============== -->
+      <section class="page hidden" id="page-weekly">
+        <div class="page-header">
+          <div>
+            <h2>קניות שבועיות</h2>
+            <p class="page-sub">בנה רשימת קנייה לפי שבוע ועקוב אחר ההוצאות</p>
+          </div>
+          <button class="btn btn-primary" id="new-weekly">
+            <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"/></svg>
+            קנייה שבועית חדשה
+          </button>
+        </div>
+
+        <div class="stat-row">
+          <div class="mini-stat glass">
+            <div class="mini-stat-label">סה"כ כל הקניות השבועיות</div>
+            <div class="mini-stat-value" id="weekly-grand-total">₪0</div>
+          </div>
+          <div class="mini-stat glass">
+            <div class="mini-stat-label">מספר קניות שמורות</div>
+            <div class="mini-stat-value" id="weekly-count">0</div>
+          </div>
+          <div class="mini-stat glass">
+            <div class="mini-stat-label">ממוצע לקנייה</div>
+            <div class="mini-stat-value" id="weekly-avg">₪0</div>
+          </div>
+        </div>
+
+        <div id="weekly-list" class="weekly-list"></div>
+      </section>
+
+      <!-- ============== Monthly Budget ============== -->
+      <section class="page hidden" id="page-budget">
+        <div class="page-header">
+          <div>
+            <h2>תקציב חודשי</h2>
+            <p class="page-sub">סה"כ של כל קטגוריה מסונכרן עם רשימת הקניות</p>
+          </div>
+          <button class="btn btn-primary" id="add-budget-cat">
+            <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"/></svg>
+            הוסף קטגוריה
+          </button>
+        </div>
+
+        <div class="budget-summary glass">
+          <div class="budget-total-label">סה"כ תקציב חודשי</div>
+          <div class="budget-total-value" id="budget-grand-total">₪0</div>
+        </div>
+
+        <div id="budget-list" class="budget-list"></div>
+      </section>
+
+      <!-- ============== Income ============== -->
+      <section class="page hidden" id="page-income">
+        <div class="page-header">
+          <div>
+            <h2>הכנסות</h2>
+            <p class="page-sub">תיעוד הכנסות, מעשרות, הפקדות והערות</p>
+          </div>
+          <button class="btn btn-primary" id="add-income">
+            <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"/></svg>
+            הוסף הכנסה
+          </button>
+        </div>
+
+        <div class="income-stats">
+          <div class="mini-stat glass">
+            <div class="mini-stat-label">סה"כ הכנסות</div>
+            <div class="mini-stat-value" id="income-total">₪0</div>
+          </div>
+          <div class="mini-stat glass">
+            <div class="mini-stat-label">מעשרות (10%)</div>
+            <div class="mini-stat-value" id="income-tithe">₪0</div>
+          </div>
+          <div class="mini-stat glass">
+            <div class="mini-stat-label">הופרש</div>
+            <div class="mini-stat-value" id="income-tithe-set">₪0</div>
+          </div>
+          <div class="mini-stat glass">
+            <div class="mini-stat-label">הופקד בבנק</div>
+            <div class="mini-stat-value" id="income-deposited">₪0</div>
+          </div>
+        </div>
+
+        <div id="income-list" class="income-list"></div>
+      </section>
+
+      <!-- ============== Categories Management ============== -->
+      <section class="page hidden" id="page-categories">
+        <div class="page-header">
+          <div>
+            <h2>קטגוריות</h2>
+            <p class="page-sub">נהל את קטגוריות המוצרים ואת הצבעים</p>
+          </div>
+          <button class="btn btn-primary" id="add-product-category">
+            <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"/></svg>
+            קטגוריה חדשה
+          </button>
+        </div>
+        <div id="product-categories-list" class="categories-grid"></div>
+      </section>
+
+    </main>
+
+    <!-- Bottom Navigation (Mobile) -->
+    <nav class="bottom-nav">
+      <button class="bottom-nav-item active" data-tab="dashboard">
+        <svg viewBox="0 0 24 24"><path fill="currentColor" d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>
+        <span>בית</span>
+      </button>
+      <button class="bottom-nav-item" data-tab="shopping">
+        <svg viewBox="0 0 24 24"><path fill="currentColor" d="M7 18c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.6-1.4 2.4c-.2.3-.2.7 0 1 .2.3.5.5.9.5h11v-2H7.4c-.1 0-.2-.1-.2-.2l1.2-2.1h7.5c.7 0 1.4-.4 1.7-1.1l3.6-6.5c.1-.2.1-.4 0-.6-.1-.2-.3-.3-.5-.3H5.2L4.3 2H1z"/></svg>
+        <span>קניות</span>
+      </button>
+      <button class="bottom-nav-item" data-tab="weekly">
+        <svg viewBox="0 0 24 24"><path fill="currentColor" d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 18H5V8h14v13z"/></svg>
+        <span>שבועי</span>
+      </button>
+      <button class="bottom-nav-item" data-tab="budget">
+        <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 1L3 5v6c0 5.5 3.8 10.7 9 12 5.2-1.3 9-6.5 9-12V5l-9-4z"/></svg>
+        <span>תקציב</span>
+      </button>
+      <button class="bottom-nav-item" data-tab="income">
+        <svg viewBox="0 0 24 24"><path fill="currentColor" d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.42 0 2.13.54 2.39 1.4.12.4.45.7.87.7h.3c.66 0 1.13-.65.9-1.27-.42-1.18-1.4-2.16-2.96-2.54V4.5C12.94 3.67 12.27 3 11.43 3h-.01c-.84 0-1.51.67-1.51 1.51v1.66c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-1.65 0-2.5-.59-2.83-1.43-.15-.39-.49-.68-.9-.68h-.28c-.67 0-1.14.68-.89 1.3.57 1.39 1.9 2.21 3.4 2.53v1.67c0 .84.67 1.51 1.51 1.51h.01c.84 0 1.51-.67 1.51-1.51v-1.65c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z"/></svg>
+        <span>הכנסות</span>
+      </button>
+    </nav>
+
+  </div>
+
+  <!-- ===== Modal ===== -->
+  <div class="modal-backdrop" id="modal-backdrop">
+    <div class="modal glass" id="modal">
+      <div class="modal-header">
+        <h3 id="modal-title"></h3>
+        <button class="icon-btn" id="modal-close">
+          <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </div>
+      <div class="modal-body" id="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- ===== Toast ===== -->
+  <div id="toast" class="toast"></div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
