@@ -230,10 +230,14 @@ function toggleMobileNav() {
     document.body.appendChild(backdrop);
   }
   backdrop.classList.toggle('show', s.classList.contains('open'));
+  $('#fab-container')?.classList.toggle('hidden-by-sidebar', s.classList.contains('open'));
+  // Also collapse the FAB menu if it was open
+  $('#fab-container')?.classList.remove('open');
 }
 function closeMobileNav() {
   $('.sidebar')?.classList.remove('open');
   document.querySelector('.sidebar-backdrop')?.classList.remove('show');
+  $('#fab-container')?.classList.remove('hidden-by-sidebar');
 }
 
 /* ===========================================================

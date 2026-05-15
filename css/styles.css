@@ -1659,15 +1659,23 @@ select option { background: var(--bg-2); color: var(--text); }
 .fab-container {
   position: fixed;
   bottom: calc(var(--bottom-nav-h) + var(--sa-bottom) + 16px);
-  inset-inline-start: 16px;
+  inset-inline-end: 16px;
   z-index: 70;
   display: flex;
   flex-direction: column-reverse;
-  align-items: flex-start;
+  align-items: flex-end;
   gap: 10px;
+  transition: opacity var(--t-fast), transform var(--t-fast);
 }
 @media (min-width: 761px) {
-  .fab-container { bottom: 24px; inset-inline-start: 24px; }
+  .fab-container { bottom: 24px; inset-inline-end: 24px; }
+}
+/* Hide FAB while the side menu is open so it doesn't cover items */
+.sidebar.open ~ .fab-container,
+.fab-container.hidden-by-sidebar {
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.7);
 }
 .fab {
   width: 58px;
@@ -1718,7 +1726,7 @@ select option { background: var(--bg-2); color: var(--text); }
   transition: var(--t-fast);
   white-space: nowrap;
 }
-.fab-action:hover { background: rgba(35, 35, 60, 1); transform: translateX(-3px); }
+.fab-action:hover { background: rgba(35, 35, 60, 1); transform: translateY(-2px); }
 .fab-action-label { order: 1; }
 .fab-action-icon {
   order: 2;
