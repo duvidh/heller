@@ -1,7 +1,8 @@
 // Main application controller
-import { db, registerUser, loginUser, getSession, clearSession, mergeBudgetDefaults, periodRange, inPeriod, plannedMultiplier, periodLabel, daysUntilDueDay, paidThisMonth } from './storage.js';
+import { db, registerUser, loginUser, getSession, clearSession, mergeBudgetDefaults, periodRange, inPeriod, plannedMultiplier, periodLabel, daysUntilDueDay, paidThisMonth, applyCloudData, collectAllData } from './storage.js';
 import { UNITS, INCOME_SOURCES } from './data.js';
 import { fmt, $, $$, el, toast, openModal, closeModal, confirmDialog, getCategoryMeta, categorySwatch, renderPeriodFilter } from './ui.js';
+import * as cloud from './cloud.js';
 
 /* PWA registration + install prompt */
 if ('serviceWorker' in navigator) {
@@ -1826,6 +1827,7 @@ function openContribModal(goal) {
    Settings: Backup / Restore / Tithe report
    =========================================================== */
 function renderSettings() {
+  renderCloudCard();
   renderTitheReport();
 }
 
@@ -2109,3 +2111,282 @@ function renderDueBills() {
     ));
   });
 }
+
+/* ===========================================================
+   Cloud sync UI (Firebase)
+   =========================================================== */
+function renderCloudCard() {
+  const statusEl = $('#cloud-status');
+  const actionsEl = $('#cloud-actions');
+  if (!statusEl || !actionsEl) return;
+  statusEl.innerHTML = '';
+  actionsEl.innerHTML = '';
+
+  const cfg = cloud.getStoredConfig();
+  const authState = cloud.getCurrentAuthState();
+
+  if (!cfg) {
+    statusEl.appendChild(el('div', { class: 'cloud-pill off' }, '⚪ לא מחובר — אין סנכרון'));
+    actionsEl.appendChild(el('button', { class: 'btn btn-primary', onclick: openConfigureCloudModal }, 'התחבר לסנכרון'));
+    return;
+  }
+
+  if (!authState) {
+    statusEl.appendChild(el('div', { class: 'cloud-pill warning' }, '🔧 Firebase מוגדר — צריך להתחבר'));
+    actionsEl.appendChild(el('button', { class: 'btn btn-primary', onclick: openSignInModal }, 'התחברות / רישום'));
+    actionsEl.appendChild(el('button', { class: 'btn btn-secondary', onclick: resetCloudConfig }, 'איפוס הגדרות Firebase'));
+    return;
+  }
+
+  // Connected and signed in
+  statusEl.appendChild(el('div', { class: 'cloud-pill connected' },
+    '✅ מחובר כ-', el('strong', {}, authState.email)
+  ));
+  statusEl.appendChild(el('div', { class: 'cloud-hint' },
+    `הנתונים מסונכרנים אוטומטית. אשתך מתחברת מטלפון אחר עם אותו אימייל וסיסמה ורואה את אותו דבר.`
+  ));
+  actionsEl.appendChild(el('button', { class: 'btn btn-secondary', onclick: doSyncNow }, '🔄 סנכרן עכשיו'));
+  actionsEl.appendChild(el('button', { class: 'btn btn-secondary', onclick: doSignOutCloud }, 'התנתק מהענן'));
+  actionsEl.appendChild(el('button', { class: 'btn btn-danger', onclick: resetCloudConfig }, 'איפוס הגדרות'));
+}
+
+function openConfigureCloudModal() {
+  const form = el('form');
+  const ta = el('textarea', {
+    class: 'input',
+    rows: 12,
+    required: true,
+    placeholder: 'הדבק כאן את האובייקט firebaseConfig מאתר Firebase…\n\nconst firebaseConfig = {\n  apiKey: "...",\n  authDomain: "...",\n  databaseURL: "...",\n  projectId: "...",\n  ...\n};'
+  });
+  const err = el('div', { style: 'color: #fca5a5; font-size: 13px; min-height: 18px;' });
+
+  form.append(
+    field('Firebase Config', ta),
+    err,
+    el('div', { class: 'modal-footer' },
+      el('button', { type: 'button', class: 'btn btn-secondary', onclick: closeModal }, 'ביטול'),
+      el('button', { type: 'submit', class: 'btn btn-primary' }, 'שמור והמשך'),
+    ),
+  );
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    err.textContent = '';
+    let config = null;
+    try {
+      config = parseFirebaseConfig(ta.value);
+    } catch (e) {
+      err.textContent = e.message;
+      return;
+    }
+    const valErr = cloud.validateConfig(config);
+    if (valErr) { err.textContent = valErr; return; }
+    try {
+      cloud.storeConfig(config);
+      await cloud.initWithConfig(config);
+      toast('Firebase מוגדר ✓', 'success');
+      closeModal();
+      renderCloudCard();
+      openSignInModal();
+    } catch (e) {
+      err.textContent = 'שגיאה: ' + (e.message || e);
+    }
+  });
+
+  openModal({ title: 'הגדרת Firebase', body: form, large: true });
+  ta.focus();
+}
+
+// Accept either a raw JSON object or a JS snippet `const firebaseConfig = {...}`
+function parseFirebaseConfig(text) {
+  text = (text || '').trim();
+  if (!text) throw new Error('שדה ריק');
+  // Strip JS wrapping
+  text = text.replace(/^\s*(?:const|let|var)\s+\w+\s*=\s*/i, '');
+  text = text.replace(/;\s*$/, '');
+  // Try JSON first
+  try { return JSON.parse(text); } catch {}
+  // Try JS-literal (allowing unquoted keys / single quotes)
+  try {
+    // eslint-disable-next-line no-new-func
+    return Function('return (' + text + ')')();
+  } catch (e) {
+    throw new Error('הקובץ לא תקין — לא הצלחתי לפענח JSON / object literal');
+  }
+}
+
+function openSignInModal() {
+  const form = el('form');
+  const tabBtns = el('div', { class: 'auth-tabs' },
+    el('button', { type: 'button', class: 'auth-tab active', dataset: { mode: 'signin' } }, 'התחברות'),
+    el('button', { type: 'button', class: 'auth-tab', dataset: { mode: 'signup' } }, 'יצירת חשבון')
+  );
+  let mode = 'signin';
+  tabBtns.querySelectorAll('.auth-tab').forEach(b => b.addEventListener('click', () => {
+    tabBtns.querySelectorAll('.auth-tab').forEach(x => x.classList.toggle('active', x === b));
+    mode = b.dataset.mode;
+    submitBtn.textContent = mode === 'signin' ? 'התחבר' : 'צור חשבון משותף';
+  }));
+
+  const emailInp = el('input', { class: 'input', type: 'email', required: true, placeholder: 'family@example.com', autocomplete: 'email' });
+  const passInp = el('input', { class: 'input', type: 'password', required: true, minlength: 6, placeholder: 'לפחות 6 תווים', autocomplete: 'current-password' });
+  const err = el('div', { style: 'color: #fca5a5; font-size: 13px; min-height: 18px;' });
+  const submitBtn = el('button', { type: 'submit', class: 'btn btn-primary btn-block' }, 'התחבר');
+
+  form.append(
+    tabBtns,
+    el('div', { style: 'font-size:12.5px; color:var(--text-3); margin-bottom:8px;' },
+      'הכניסו את שניכם את אותם אימייל וסיסמה — זה הופך אתכם לחשבון משותף.'),
+    field('אימייל', emailInp),
+    field('סיסמה', passInp),
+    err,
+    submitBtn,
+  );
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    err.textContent = '';
+    submitBtn.disabled = true;
+    submitBtn.textContent = '...';
+    try {
+      const fn = mode === 'signin' ? cloud.signIn : cloud.signUp;
+      await fn(emailInp.value.trim(), passInp.value);
+      closeModal();
+      toast(mode === 'signin' ? 'מחובר ✓' : 'חשבון נוצר ומחובר ✓', 'success');
+      await onCloudConnected();
+    } catch (e) {
+      err.textContent = humanFirebaseError(e);
+      submitBtn.disabled = false;
+      submitBtn.textContent = mode === 'signin' ? 'התחבר' : 'צור חשבון משותף';
+    }
+  });
+
+  openModal({ title: '☁️ חיבור לחשבון משותף', body: form });
+  emailInp.focus();
+}
+
+function humanFirebaseError(e) {
+  const code = e?.code || '';
+  if (code.includes('email-already-in-use')) return 'אימייל כבר רשום — נסה "התחברות"';
+  if (code.includes('invalid-email')) return 'אימייל לא תקין';
+  if (code.includes('weak-password')) return 'סיסמה חלשה — נסה לפחות 6 תווים';
+  if (code.includes('wrong-password') || code.includes('invalid-credential')) return 'אימייל או סיסמה שגויים';
+  if (code.includes('user-not-found')) return 'משתמש לא קיים — נסה "יצירת חשבון"';
+  if (code.includes('network-request-failed')) return 'בעיית חיבור לאינטרנט';
+  if (code.includes('too-many-requests')) return 'יותר מדי ניסיונות — נסה שוב מאוחר יותר';
+  return e?.message || 'שגיאה לא ידועה';
+}
+
+async function onCloudConnected() {
+  // Decide: pull or push?
+  // - If cloud has data, ask user whether to pull or push (overwrite).
+  // - If cloud is empty, push local.
+  const remote = await cloud.pull();
+  const session = getSession();
+  if (!session) return;
+  const local = collectAllData(session.username);
+  const localHasData = Object.values(local).some(v => Array.isArray(v) && v.length > 0);
+  const remoteHasData = remote && Object.keys(remote).some(k => k !== '_meta' && Array.isArray(remote[k]) && remote[k].length > 0);
+
+  if (remoteHasData && localHasData) {
+    const choice = await chooseSyncDirection();
+    if (choice === 'pull') {
+      applyCloudData(session.username, remote);
+      toast('נתונים נטענו מהענן', 'success');
+    } else if (choice === 'push') {
+      await cloud.push(local);
+      toast('הנתונים המקומיים הועלו לענן', 'success');
+    }
+  } else if (remoteHasData) {
+    applyCloudData(session.username, remote);
+    toast('נתונים נטענו מהענן', 'success');
+  } else {
+    await cloud.push(local);
+    toast('הנתונים שלך הועלו לענן 🚀', 'success');
+  }
+
+  // Subscribe to remote changes from other devices
+  cloud.watchRemote((data) => {
+    applyCloudData(session.username, data);
+    renderAll();
+    toast('נתונים סונכרנו ממכשיר אחר 🔄', 'success');
+  });
+
+  renderAll();
+  renderCloudCard();
+}
+
+function chooseSyncDirection() {
+  return new Promise((resolve) => {
+    const body = el('div', {},
+      el('p', { style: 'margin: 4px 0 14px; color: var(--text-2);' },
+        'גם במכשיר הזה וגם בענן יש נתונים. איזה צד שומרים?'),
+      el('div', { style: 'display:flex; flex-direction:column; gap:10px;' },
+        el('button', { class: 'btn btn-primary', onclick: () => { closeModal(); resolve('pull'); } },
+          '⬇️  השתמש בנתונים מהענן (יחליף את המקומיים)'),
+        el('button', { class: 'btn btn-secondary', onclick: () => { closeModal(); resolve('push'); } },
+          '⬆️  העלה את הנתונים המקומיים לענן (יחליף את הענן)'),
+        el('button', { class: 'btn btn-ghost', onclick: () => { closeModal(); resolve('cancel'); } },
+          'בטל — אל תסנכרן כעת'),
+      ),
+    );
+    openModal({ title: 'יש התנגשות נתונים', body, onClose: () => resolve('cancel') });
+  });
+}
+
+async function doSyncNow() {
+  const session = getSession();
+  if (!session) return;
+  toast('מסנכרן...');
+  const remote = await cloud.pull();
+  if (remote) {
+    applyCloudData(session.username, remote);
+    renderAll();
+  }
+  await cloud.push(collectAllData(session.username));
+  toast('סונכרן ✓', 'success');
+  renderCloudCard();
+}
+
+async function doSignOutCloud() {
+  await cloud.signOutCloud();
+  toast('התנתקת מהענן');
+  renderCloudCard();
+}
+
+async function resetCloudConfig() {
+  const ok = await confirmDialog({
+    title: 'איפוס הגדרות Firebase',
+    message: 'הפעולה תמחק את הגדרות Firebase במכשיר הזה (אבל הנתונים בענן יישמרו). תוכל להגדיר מחדש או להתחבר בחזרה. להמשיך?',
+    confirmLabel: 'אפס',
+    danger: true,
+  });
+  if (!ok) return;
+  await cloud.signOutCloud().catch(() => {});
+  cloud.clearStoredConfig();
+  toast('הגדרות אופסו');
+  // Reload to clear in-memory Firebase state
+  setTimeout(() => location.reload(), 500);
+}
+
+/* Cloud bootstrap — runs once at app load */
+(async function bootCloud() {
+  const state = await cloud.autoBoot();
+  if (state) {
+    // Auto-subscribe and pull on app start
+    const session = getSession();
+    if (session) {
+      try {
+        const remote = await cloud.pull();
+        if (remote) applyCloudData(session.username, remote);
+        cloud.watchRemote((data) => {
+          applyCloudData(session.username, data);
+          renderAll();
+        });
+      } catch (e) {
+        console.warn('cloud boot pull failed', e);
+      }
+    }
+  }
+})();
+

@@ -1,17 +1,17 @@
 // Heller PWA service worker — cache-first with network fallback
-const VERSION = 'heller-v9';
+const VERSION = 'heller-v10';
 const SHELL = [
   './',
   './index.html',
-  './css/styles.css?v=6',
-  './js/app.js?v=6',
+  './css/styles.css?v=10',
+  './js/app.js?v=10',
   './js/data.js',
   './js/storage.js',
   './js/ui.js',
+  './js/cloud.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './manifest.webmanifest',
-  'https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&family=Rubik:wght@300;400;500;600;700;800&display=swap',
 ];
 
 self.addEventListener('install', (event) => {

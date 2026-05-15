@@ -1,5 +1,6 @@
 // Data persistence + multi-user storage layer
 import { DEFAULT_ITEMS, DEFAULT_BUDGET_CATEGORIES, PRODUCT_CATEGORIES } from './data.js';
+import * as cloud from './cloud.js';
 
 const NS = 'heller_v1';
 const USERS_KEY = `${NS}.users`;
@@ -82,6 +83,38 @@ function read(username, name, fallback) {
 
 function write(username, name, data) {
   localStorage.setItem(userKey(username, name), JSON.stringify(data));
+  // Mirror to cloud (debounced) if signed in.
+  if (cloud.isConnected()) {
+    cloud.queuePush(() => collectAllData(username));
+  }
+}
+
+// Bypass cloud sync — used when applying remote pulls to avoid loops.
+export function writeRaw(username, name, data) {
+  localStorage.setItem(userKey(username, name), JSON.stringify(data));
+}
+
+// Collect every entity for the given user, used by cloud push.
+export function collectAllData(username) {
+  return {
+    shopping: read(username, 'shopping', []),
+    budget: read(username, 'budget', []),
+    productCategories: read(username, 'productCategories', []),
+    weekly: read(username, 'weekly', []),
+    income: read(username, 'income', []),
+    goals: read(username, 'goals', []),
+  };
+}
+
+// Apply a cloud payload to local storage for the given user.
+// Skips the _meta key and ignores fields that aren't arrays.
+export function applyCloudData(username, payload) {
+  if (!payload) return;
+  ['shopping', 'budget', 'productCategories', 'weekly', 'income', 'goals'].forEach(k => {
+    if (Array.isArray(payload[k])) {
+      writeRaw(username, k, payload[k]);
+    }
+  });
 }
 
 function uuid() {

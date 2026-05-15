@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&family=Rubik:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/styles.css?v=9" />
+  <link rel="stylesheet" href="css/styles.css?v=10" />
 </head>
 <body>
 
@@ -403,8 +403,43 @@
         </div>
 
         <div class="settings-grid">
+          <div class="settings-card glass" style="grid-column: 1 / -1;">
+            <h3>☁️ סנכרון ענן (משותף בין מכשירים)</h3>
+            <p>חבר את האפליקציה לחשבון Firebase שלך כדי שהנתונים יסונכרנו בזמן אמת בין כל המכשירים שמחוברים לאותו חשבון. אשתך נכנסת עם אותו אימייל וסיסמה — ורואים את אותם נתונים.</p>
+            <div id="cloud-status" class="cloud-status"></div>
+            <div id="cloud-actions" class="settings-actions"></div>
+            <details class="cloud-setup">
+              <summary>איך מקימים חשבון Firebase? (פעם אחת, חינם)</summary>
+              <ol class="setup-steps">
+                <li>היכנס ל-<a href="https://console.firebase.google.com" target="_blank" rel="noopener">console.firebase.google.com</a> ולחץ "Add project" (פרויקט חדש)</li>
+                <li>תן שם (לדוגמה: heller-family), בטל Analytics, ולחץ "Create"</li>
+                <li>בתפריט השמאלי לחץ "Build" → "<strong>Realtime Database</strong>" → "Create Database" → בחר אזור (Europe) → התחל ב-"Locked mode"</li>
+                <li>במסך ה-Database, לחץ על לשונית "<strong>Rules</strong>" והדבק:
+                  <pre>{
+  "rules": {
+    "users": {
+      "$uid": {
+        ".read": "$uid === auth.uid",
+        ".write": "$uid === auth.uid"
+      }
+    }
+  }
+}</pre>
+                  לחץ "Publish".
+                </li>
+                <li>בתפריט השמאלי "Build" → "<strong>Authentication</strong>" → "Get Started" → לשונית "Sign-in method" → לחץ על "Email/Password" → Enable → Save</li>
+                <li>חזרה לדף ההגדרות הראשי של הפרויקט (אייקון גלגל שיניים → Project settings) → גלול למטה ל-"Your apps" → לחץ על אייקון Web `&lt;/&gt;`</li>
+                <li>תן Nickname לאפליקציה (לדוגמה: heller-web), לחץ "Register app", ו<strong>העתק את כל הבלוק <code>const firebaseConfig = {...}</code></strong></li>
+                <li>חזור הנה ולחץ "התחבר לסנכרון" למטה — הדבק את ה-JSON</li>
+              </ol>
+              <div style="font-size: 12px; color: var(--text-3); margin-top: 8px;">
+                💡 חינמי לחלוטין במסגרת ה-Free Tier (Spark plan) — מספיק בקלות לעשרות משתמשים. הנתונים שלך אצלך, באף שלב לא עוברים אצלי.
+              </div>
+            </details>
+          </div>
+
           <div class="settings-card glass">
-            <h3>💾 גיבוי ושחזור</h3>
+            <h3>💾 גיבוי ושחזור מקומי</h3>
             <p>הנתונים שלך נשמרים מקומית בדפדפן. הורד גיבוי כדי לא לאבד אותם.</p>
             <div class="settings-actions">
               <button class="btn btn-primary" id="export-data">
@@ -522,6 +557,6 @@
   <!-- ===== Toast ===== -->
   <div id="toast" class="toast"></div>
 
-  <script type="module" src="js/app.js?v=9"></script>
+  <script type="module" src="js/app.js?v=10"></script>
 </body>
 </html>
