@@ -1,7 +1,7 @@
 // Main application controller
-import { db, registerUser, loginUser, getSession, clearSession, mergeBudgetDefaults } from './storage.js';
+import { db, registerUser, loginUser, getSession, clearSession, mergeBudgetDefaults, periodRange, inPeriod, plannedMultiplier, periodLabel } from './storage.js';
 import { UNITS, INCOME_SOURCES } from './data.js';
-import { fmt, $, $$, el, toast, openModal, closeModal, confirmDialog, getCategoryMeta, categorySwatch } from './ui.js';
+import { fmt, $, $$, el, toast, openModal, closeModal, confirmDialog, getCategoryMeta, categorySwatch, renderPeriodFilter } from './ui.js';
 
 /* ===========================================================
    App state
@@ -10,6 +10,7 @@ const state = {
   user: null,
   tab: 'dashboard',
   shoppingFilter: { search: '', category: '' },
+  period: { type: 'currentMonth' },
 };
 
 /* ===========================================================
@@ -112,6 +113,17 @@ document.addEventListener('DOMContentLoaded', () => {
     state.shoppingFilter.category = e.target.value;
     renderShopping();
   });
+  $('#clear-purchased').addEventListener('click', async () => {
+    const ok = await confirmDialog({
+      title: 'ניקוי סימונים',
+      message: 'לבטל את כל הסימונים של מוצרים שנקנו?',
+      confirmLabel: 'נקה',
+    });
+    if (!ok) return;
+    db.clearAllPurchased();
+    toast('הסימונים נוקו', 'success');
+    renderShopping();
+  });
 
   $('#new-weekly').addEventListener('click', () => openWeeklyModal());
   $('#add-budget-cat').addEventListener('click', () => openBudgetCategoryModal());
@@ -206,48 +218,77 @@ function renderCurrent() {
    Dashboard
    =========================================================== */
 function renderDashboard() {
-  const incomes = db.getIncome();
+  const period = state.period;
+
+  // Period filter
+  const filterContainer = $('#dashboard-period-filter');
+  filterContainer.innerHTML = '';
+  filterContainer.appendChild(renderPeriodFilter(period, (p) => {
+    state.period = p;
+    renderDashboard();
+  }));
+
+  // Filter data by period
+  const allIncomes = db.getIncome();
+  const incomes = allIncomes.filter(i => inPeriod(i.date || i.createdAt, period));
   const totalIncome = incomes.reduce((s, i) => s + (Number(i.amount) || 0), 0);
   const tithe = incomes.reduce((s, i) => s + ((Number(i.amount) || 0) * 0.1), 0);
   const titheSet = incomes.filter(i => i.titheSet).reduce((s, i) => s + ((Number(i.amount) || 0) * 0.1), 0);
 
-  const budgetTotal = computeBudgetTotal();
-  const balance = totalIncome - budgetTotal;
+  const cats = db.getBudget();
+  const budgetPlanned = cats.reduce((s, c) => s + categoryPlanned(c, period), 0);
+  const budgetActual = cats.reduce((s, c) => s + categoryActual(c, period), 0);
+  const balance = totalIncome - budgetActual;
 
   $('#stat-income').textContent = fmt.money(totalIncome);
-  $('#stat-income-meta').textContent = `${incomes.length} רשומות`;
-  $('#stat-budget').textContent = fmt.money(budgetTotal);
+  $('#stat-income-meta').textContent = `${incomes.length} רשומות • ${periodLabel(period)}`;
+  $('#stat-budget').textContent = fmt.money(budgetActual);
+  $('#stat-budget-meta') && ($('#stat-budget-meta').textContent = `מתוך ${fmt.money(budgetPlanned)} מתוכנן`);
   $('#stat-balance').textContent = fmt.money(balance);
   $('#stat-balance').style.color = balance >= 0 ? '#34d399' : '#fca5a5';
   $('#stat-tithe').textContent = fmt.money(tithe);
   $('#stat-tithe-meta').textContent = `הופרש: ${fmt.money(titheSet)}`;
 
-  // Budget chart
+  // Budget chart - planned vs actual
   const chart = $('#budget-chart');
   chart.innerHTML = '';
-  const cats = db.getBudget().map(c => ({ ...c, total: computeCategoryBudgetTotal(c) }));
-  const maxVal = Math.max(...cats.map(c => c.total), 1);
-  if (cats.length === 0) {
+  const decoratedCats = cats.map(c => ({
+    ...c,
+    planned: categoryPlanned(c, period),
+    actual: categoryActual(c, period),
+  }));
+  const maxVal = Math.max(...decoratedCats.map(c => Math.max(c.planned, c.actual)), 1);
+  if (decoratedCats.length === 0) {
     chart.appendChild(emptyState('📊', 'אין נתוני תקציב', 'הוסף קטגוריות בעמוד התקציב'));
   } else {
-    cats.sort((a, b) => b.total - a.total).slice(0, 8).forEach(c => {
-      const pct = (c.total / maxVal) * 100;
-      chart.appendChild(el('div', { class: 'bar-row' },
+    decoratedCats.sort((a, b) => b.planned - a.planned).slice(0, 8).forEach(c => {
+      const plannedPct = (c.planned / maxVal) * 100;
+      const actualPct = (c.actual / maxVal) * 100;
+      chart.appendChild(el('div', { class: 'bar-row dual' },
         el('span', { class: 'label' }, `${c.icon || '📦'} ${c.name}`),
-        el('span', { class: 'bar' }, el('span', { style: { width: pct + '%', background: gradFor(c.color) } })),
-        el('span', { class: 'val' }, fmt.money(c.total)),
+        el('div', { class: 'bars' },
+          el('div', { class: 'bar bar-planned' },
+            el('span', { style: { width: plannedPct + '%', background: gradFor(c.color) } })),
+          el('div', { class: 'bar bar-actual' },
+            el('span', { style: { width: actualPct + '%' } })),
+        ),
+        el('div', { class: 'vals' },
+          el('div', { class: 'val planned' }, fmt.money(c.planned)),
+          el('div', { class: 'val actual' }, fmt.money(c.actual)),
+        ),
       ));
     });
   }
 
-  // Recent weeklies
+  // Recent weeklies (in period)
   const weeklyEl = $('#recent-weeklies');
   weeklyEl.innerHTML = '';
-  const weeklies = db.getWeekly().slice(0, 5);
+  const allWeeklies = db.getWeekly();
+  const weeklies = allWeeklies.filter(w => inPeriod(w.createdAt, period));
   if (weeklies.length === 0) {
-    weeklyEl.appendChild(emptyState('🛍️', 'אין קניות שבועיות', 'התחל קנייה שבועית חדשה'));
+    weeklyEl.appendChild(emptyState('🛍️', 'אין קניות שבועיות בתקופה זו', 'התחל קנייה שבועית חדשה'));
   } else {
-    weeklies.forEach(w => {
+    weeklies.slice(0, 5).forEach(w => {
       const total = weeklyTotal(w);
       weeklyEl.appendChild(el('div', { class: 'recent-item' },
         el('div', { class: 'left' },
@@ -257,22 +298,20 @@ function renderDashboard() {
         el('div', { class: 'amount' }, fmt.money(total)),
       ));
     });
-    // Grand total
     const grand = weeklies.reduce((s, w) => s + weeklyTotal(w), 0);
     weeklyEl.appendChild(el('div', { class: 'recent-item', style: { background: 'var(--grad-card)' } },
-      el('div', { class: 'left' }, el('div', { class: 'name' }, 'סה"כ כל הקניות השבועיות')),
-      el('div', { class: 'amount positive' }, fmt.money(db.getWeekly().reduce((s, w) => s + weeklyTotal(w), 0))),
+      el('div', { class: 'left' }, el('div', { class: 'name' }, `סה"כ ${periodLabel(period)}`)),
+      el('div', { class: 'amount positive' }, fmt.money(grand)),
     ));
   }
 
-  // Recent incomes
+  // Recent incomes (in period)
   const incEl = $('#recent-incomes');
   incEl.innerHTML = '';
-  const recIncomes = incomes.slice(0, 6);
-  if (recIncomes.length === 0) {
-    incEl.appendChild(emptyState('💰', 'אין הכנסות', 'הוסף הכנסה ראשונה'));
+  if (incomes.length === 0) {
+    incEl.appendChild(emptyState('💰', 'אין הכנסות בתקופה זו', 'הוסף הכנסה'));
   } else {
-    recIncomes.forEach(i => {
+    incomes.slice(0, 6).forEach(i => {
       incEl.appendChild(el('div', { class: 'recent-item' },
         el('div', { class: 'left' },
           el('div', {}, el('div', { class: 'name' }, i.source || 'הכנסה'),
@@ -372,7 +411,16 @@ function renderShopping() {
       el('div', { class: 'total' }, fmt.money(groupTotal)),
     ));
     groupItems.forEach(it => {
-      group.appendChild(el('div', { class: 'item-row' },
+      const checkbox = el('input', { type: 'checkbox', class: 'item-checkbox' });
+      checkbox.checked = !!it.purchased;
+      checkbox.addEventListener('click', (e) => e.stopPropagation());
+      checkbox.addEventListener('change', () => {
+        db.toggleItemPurchased(it.id);
+        renderShopping();
+      });
+
+      const row = el('div', { class: 'item-row' + (it.purchased ? ' purchased' : '') },
+        checkbox,
         el('div', { class: 'name' }, it.name,
           el('div', { class: 'unit-info' }, `${it.unit || 'יחידה'}`)),
         el('div', { class: 'qty' },
@@ -386,12 +434,20 @@ function renderShopping() {
           fmt.money(it.price)),
         el('div', { class: 'total' }, fmt.money(it.total)),
         el('div', { class: 'actions' },
-          el('button', { onclick: () => openItemModal(it), title: 'ערוך' },
+          el('button', { onclick: (e) => { e.stopPropagation(); openItemModal(it); }, title: 'ערוך' },
             el('svg', { viewBox: '0 0 24 24', width: 16, height: 16, html: '<path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.996.996 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>' })),
-          el('button', { class: 'del', onclick: () => deleteItem(it), title: 'מחק' },
+          el('button', { class: 'del', onclick: (e) => { e.stopPropagation(); deleteItem(it); }, title: 'מחק' },
             el('svg', { viewBox: '0 0 24 24', width: 16, height: 16, html: '<path fill="currentColor" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>' })),
         ),
-      ));
+      );
+      // Make whole row clickable to toggle (except buttons)
+      row.addEventListener('click', (e) => {
+        if (e.target.closest('button') || e.target === checkbox) return;
+        checkbox.checked = !checkbox.checked;
+        db.toggleItemPurchased(it.id);
+        renderShopping();
+      });
+      group.appendChild(row);
     });
     list.appendChild(group);
   });
@@ -533,12 +589,99 @@ function computeBudgetTotal() {
   return db.getBudget().reduce((s, c) => s + computeCategoryBudgetTotal(c), 0);
 }
 
+/* --------- Actuals (spent in period) --------- */
+function actualForItem(item, period) {
+  return (item.payments || [])
+    .filter(p => inPeriod(p.date, period))
+    .reduce((s, p) => s + (Number(p.amount) || 0), 0);
+}
+
+// Weekly shopping totals are the "actual" for linked-to-shopping categories.
+function shoppingActualInPeriod(period) {
+  return db.getWeekly()
+    .filter(w => inPeriod(w.createdAt, period))
+    .reduce((sum, w) => sum + weeklyTotal(w), 0);
+}
+
+function categoryPlanned(cat, period) {
+  const mult = plannedMultiplier(period);
+  const itemsTotal = (cat.items || []).reduce((s, i) => s + (Number(i.amount) || 0), 0) * mult;
+  if (cat.linkedToShopping) {
+    // Linked-to-shopping categories' "planned" still includes the master shopping total
+    const shopTotals = computeShoppingTotalsByBudgetCat();
+    return itemsTotal + (shopTotals[cat.name] || 0) * mult;
+  }
+  return itemsTotal;
+}
+
+function categoryActual(cat, period) {
+  // Manual payments on each item
+  let total = (cat.items || []).reduce((s, i) => s + actualForItem(i, period), 0);
+  // Plus weekly shopping totals for linked-to-shopping categories
+  if (cat.linkedToShopping) {
+    // For simplicity: all weekly shopping counts toward מחיה (the only practical case here).
+    // If the user has multiple linked categories with overlap, this is approximate.
+    if (cat.name === 'מחיה' || cat.name === 'שבת') {
+      // Split weekly shopping by item budgetCategory if stored, else lump into מחיה
+      total += weeklyActualByCategory(cat.name, period);
+    }
+  }
+  return total;
+}
+
+function weeklyActualByCategory(catName, period) {
+  // Match each weekly item to its budgetCategory if available; default to 'מחיה'
+  return db.getWeekly()
+    .filter(w => inPeriod(w.createdAt, period))
+    .reduce((sum, w) => {
+      return sum + (w.items || []).reduce((s, it) => {
+        const itCat = it.budgetCategory || 'מחיה';
+        if (itCat !== catName) return s;
+        return s + (Number(it.qty) || 0) * (Number(it.price) || 0);
+      }, 0);
+    }, 0);
+}
+
+function progressClass(actual, planned) {
+  if (planned === 0) return 'zero';
+  const ratio = actual / planned;
+  if (ratio < 0.7) return 'under';
+  if (ratio < 1.0) return 'near';
+  return 'over';
+}
+
 /* ===========================================================
    Budget page
    =========================================================== */
 function renderBudget() {
   const cats = db.getBudget();
-  $('#budget-grand-total').textContent = fmt.money(computeBudgetTotal());
+  const period = state.period;
+
+  // Period filter at top
+  const filterContainer = $('#budget-period-filter');
+  filterContainer.innerHTML = '';
+  filterContainer.appendChild(renderPeriodFilter(period, (p) => {
+    state.period = p;
+    renderBudget();
+    renderDashboard();
+  }));
+
+  // Grand totals
+  const totalPlanned = cats.reduce((s, c) => s + categoryPlanned(c, period), 0);
+  const totalActual = cats.reduce((s, c) => s + categoryActual(c, period), 0);
+
+  $('#budget-grand-total').textContent = fmt.money(totalPlanned);
+  $('#budget-grand-actual').textContent = fmt.money(totalActual);
+  $('#budget-grand-label').textContent =
+    period.type === 'currentYear' ? 'תקציב שנתי' : 'תקציב חודשי';
+  $('#budget-period-label').textContent = periodLabel(period);
+
+  const overallPct = totalPlanned > 0 ? Math.min(100, (totalActual / totalPlanned) * 100) : 0;
+  const overallBar = $('#budget-grand-progress');
+  overallBar.innerHTML = '';
+  const overallSpan = el('span', { style: { width: overallPct + '%' } });
+  overallBar.appendChild(overallSpan);
+  overallBar.classList.toggle('over', totalActual > totalPlanned && totalPlanned > 0);
 
   const list = $('#budget-list');
   list.innerHTML = '';
@@ -546,51 +689,66 @@ function renderBudget() {
     list.appendChild(emptyState('💰', 'אין קטגוריות תקציב', 'הוסף קטגוריה חדשה'));
     return;
   }
-  const shopTotals = computeShoppingTotalsByBudgetCat();
 
   cats.forEach(cat => {
-    const total = computeCategoryBudgetTotal(cat);
-    const shoppingPart = cat.linkedToShopping ? (shopTotals[cat.name] || 0) : 0;
+    const planned = categoryPlanned(cat, period);
+    const actual = categoryActual(cat, period);
+    const pct = planned > 0 ? Math.min(100, (actual / planned) * 100) : 0;
+    const isOver = actual > planned && planned > 0;
+
     const card = el('div', { class: 'budget-cat-card glass' });
 
-    card.appendChild(
-      el('div', { class: 'budget-cat-header' },
-        el('div', {
-          class: 'budget-cat-icon',
-          style: { background: (cat.color || '#7c5cff') + '24', color: cat.color || '#a78bfa' }
-        }, cat.icon || '📦'),
-        el('div', { class: 'budget-cat-name' }, cat.name),
-        el('div', { class: 'budget-cat-actions' },
-          el('button', { class: 'icon-btn', onclick: () => openBudgetCategoryModal(cat), title: 'ערוך קטגוריה' },
-            el('svg', { viewBox: '0 0 24 24', width: 16, height: 16, html: '<path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z"/>' })),
-          el('button', { class: 'icon-btn', onclick: () => deleteBudgetCat(cat), title: 'מחק' },
-            el('svg', { viewBox: '0 0 24 24', width: 16, height: 16, html: '<path fill="currentColor" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>' })),
-        ),
-      )
+    const header = el('div', { class: 'budget-cat-header' },
+      el('div', {
+        class: 'budget-cat-icon',
+        style: { background: (cat.color || '#7c5cff') + '24', color: cat.color || '#a78bfa' }
+      }, cat.icon || '📦'),
+      el('div', { class: 'budget-cat-name' }, cat.name),
+      el('div', { style: 'font-size: 20px; color: var(--text-3);' }, '›'),
     );
+    header.addEventListener('click', () => openBudgetCategoryModal(cat));
+    card.appendChild(header);
+
     if (cat.linkedToShopping) {
       card.appendChild(el('span', { class: 'budget-cat-linked-badge' }, '🔗 מסונכרן עם רשימת הקניות'));
     }
-    card.appendChild(el('div', { class: 'budget-cat-total' }, fmt.money(total)));
+
+    card.appendChild(el('div', { class: 'budget-cat-totals' },
+      el('div', { class: 'planned' }, 'מתוכנן: ', el('strong', {}, fmt.money(planned))),
+      el('div', { class: 'actual' }, 'בפועל: ', el('strong', {}, fmt.money(actual))),
+      el('div', { style: 'margin-inline-start:auto; font-size:13px; font-weight:700; color:' + (isOver ? '#f87171' : (pct > 70 ? '#fbbf24' : '#34d399')) }, Math.round(pct) + '%'),
+    ));
+
+    const progressBar = el('div', { class: 'budget-progress' + (isOver ? ' over' : '') });
+    progressBar.appendChild(el('span', { style: { width: pct + '%' } }));
+    card.appendChild(progressBar);
 
     const itemsList = el('div', { class: 'budget-items-list' });
-    if (cat.linkedToShopping && shoppingPart > 0) {
-      itemsList.appendChild(el('div', { class: 'budget-item-row', style: 'background: var(--grad-card);' },
-        el('span', { class: 'name' }, '🛒 מרשימת הקניות'),
-        el('span', { class: 'amt' }, fmt.money(shoppingPart)),
-      ));
+    if (cat.linkedToShopping) {
+      const shopAct = weeklyActualByCategory(cat.name, period);
+      if (shopAct > 0) {
+        itemsList.appendChild(el('div', { class: 'budget-item-row', style: 'background: var(--grad-card);' },
+          el('span', { class: 'name' }, '🛒 מהקניות השבועיות'),
+          el('span', { class: 'amounts' },
+            el('span', { class: 'actual-amt under' }, fmt.money(shopAct))
+          ),
+        ));
+      }
     }
     (cat.items || []).forEach(item => {
-      itemsList.appendChild(el('div', { class: 'budget-item-row' },
+      const itemPlanned = (Number(item.amount) || 0) * plannedMultiplier(period);
+      const itemActual = actualForItem(item, period);
+
+      const row = el('div', { class: 'budget-item-row' },
         el('span', { class: 'name' }, item.name),
-        el('span', { class: 'amt' }, fmt.money(item.amount)),
-        el('div', { class: 'actions' },
-          el('button', { onclick: () => openBudgetItemModal(cat, item), title: 'ערוך' },
-            el('svg', { viewBox: '0 0 24 24', width: 12, height: 12, html: '<path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z"/>' })),
-          el('button', { onclick: () => deleteBudgetItem(cat, item), title: 'מחק' },
-            el('svg', { viewBox: '0 0 24 24', width: 12, height: 12, html: '<path fill="currentColor" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>' })),
+        el('span', { class: 'amounts' },
+          el('span', { class: 'planned-amt' }, fmt.money(itemPlanned)),
+          el('span', { class: 'actual-amt ' + progressClass(itemActual, itemPlanned) },
+            fmt.money(itemActual)),
         ),
-      ));
+      );
+      row.addEventListener('click', () => openBudgetItemModal(cat, item));
+      itemsList.appendChild(row);
     });
     card.appendChild(itemsList);
     card.appendChild(el('button', { class: 'budget-add-item', onclick: () => openBudgetItemModal(cat) }, '+ הוסף סעיף'));
@@ -600,13 +758,17 @@ function renderBudget() {
 }
 
 function deleteBudgetCat(cat) {
+  closeModal();
   confirmDialog({
     title: 'מחיקת קטגוריה',
     message: `למחוק את הקטגוריה "${cat.name}" וכל הסעיפים שבה?`,
     confirmLabel: 'מחק',
     danger: true,
   }).then(ok => {
-    if (!ok) return;
+    if (!ok) {
+      openBudgetCategoryModal(cat);
+      return;
+    }
     db.deleteBudgetCategory(cat.id);
     toast('הקטגוריה נמחקה');
     renderBudget();
@@ -623,14 +785,23 @@ function openBudgetCategoryModal(cat) {
   const linkedChk = el('input', { type: 'checkbox' });
   if (cat?.linkedToShopping) linkedChk.checked = true;
 
+  const footerButtons = [
+    el('button', { type: 'button', class: 'btn btn-secondary', onclick: closeModal }, 'ביטול'),
+  ];
+  if (isEdit) {
+    footerButtons.unshift(el('button', {
+      type: 'button',
+      class: 'btn btn-danger',
+      onclick: () => deleteBudgetCat(cat),
+    }, 'מחק'));
+  }
+  footerButtons.push(el('button', { type: 'submit', class: 'btn btn-primary' }, isEdit ? 'עדכן' : 'הוסף'));
+
   form.append(
     field('שם קטגוריה', nameInp),
     twoCol(field('אימוג׳י', iconInp), field('צבע', colorInp)),
     el('label', { class: 'checkbox-row' }, linkedChk, el('span', {}, '🔗 קשור לרשימת הקניות (סה"כ מחושב אוטומטית)')),
-    el('div', { class: 'modal-footer' },
-      el('button', { type: 'button', class: 'btn btn-secondary', onclick: closeModal }, 'ביטול'),
-      el('button', { type: 'submit', class: 'btn btn-primary' }, isEdit ? 'עדכן' : 'הוסף'),
-    ),
+    el('div', { class: 'modal-footer' }, ...footerButtons),
   );
 
   form.addEventListener('submit', (e) => {
@@ -659,17 +830,74 @@ function openBudgetCategoryModal(cat) {
 
 function openBudgetItemModal(cat, item) {
   const isEdit = !!item;
+  // Refresh item from db so payments list is current
+  if (isEdit) {
+    const fresh = db.getBudget().find(c => c.id === cat.id)?.items.find(i => i.id === item.id);
+    if (fresh) item = fresh;
+  }
+
   const form = el('form');
   const nameInp = el('input', { class: 'input', required: true, value: item?.name || '', placeholder: 'לדוגמה: חשמל' });
   const amountInp = el('input', { class: 'input', type: 'number', step: '0.01', required: true, value: item?.amount || 0, placeholder: '0' });
 
+  // Payments section (only for existing items)
+  let paymentsSection = null;
+  if (isEdit) {
+    paymentsSection = el('div', { style: 'border-top: 1px solid var(--border); padding-top: 14px; margin-top: 8px;' });
+    paymentsSection.appendChild(el('div', {
+      style: 'display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;'
+    },
+      el('div', {},
+        el('div', { style: 'font-size: 14px; font-weight: 700;' }, 'הוצאות בפועל'),
+        el('div', { style: 'font-size: 12px; color: var(--text-3);' }, `סה"כ: ${fmt.money((item.payments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0))}`),
+      ),
+      el('button', { type: 'button', class: 'btn btn-primary btn-sm', onclick: () => openPaymentModal(cat, item) }, '+ הוסף תשלום'),
+    ));
+
+    const paymentsList = el('div', { class: 'payments-list' });
+    const payments = (item.payments || []).slice().sort((a, b) => (b.date || 0) - (a.date || 0));
+    if (payments.length === 0) {
+      paymentsList.appendChild(el('div', { style: 'font-size: 13px; color: var(--text-3); text-align: center; padding: 16px;' }, 'אין רשומות הוצאה'));
+    } else {
+      payments.forEach(p => {
+        paymentsList.appendChild(el('div', { class: 'payment-row' },
+          el('div', {},
+            el('div', { class: 'pay-amt' }, fmt.money(p.amount)),
+            el('div', { class: 'pay-date' }, fmt.date(p.date)),
+          ),
+          el('div', { style: 'font-size: 12.5px; color: var(--text-2);' }, p.notes || ''),
+          el('button', { type: 'button', class: 'icon-btn', onclick: () => openPaymentModal(cat, item, p) },
+            el('svg', { viewBox: '0 0 24 24', width: 14, height: 14, html: '<path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z"/>' })),
+          el('button', { type: 'button', class: 'pay-del', onclick: () => {
+            db.deletePayment(cat.id, item.id, p.id);
+            toast('הוצאה נמחקה');
+            closeModal();
+            openBudgetItemModal(cat, item);
+          } },
+            el('svg', { viewBox: '0 0 24 24', width: 12, height: 12, html: '<path fill="currentColor" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>' })),
+        ));
+      });
+    }
+    paymentsSection.appendChild(paymentsList);
+  }
+
+  const footerButtons = [
+    el('button', { type: 'button', class: 'btn btn-secondary', onclick: closeModal }, 'ביטול'),
+  ];
+  if (isEdit) {
+    footerButtons.unshift(el('button', {
+      type: 'button',
+      class: 'btn btn-danger',
+      onclick: () => deleteBudgetItem(cat, item),
+    }, 'מחק'));
+  }
+  footerButtons.push(el('button', { type: 'submit', class: 'btn btn-primary' }, isEdit ? 'עדכן' : 'הוסף'));
+
   form.append(
     field('שם סעיף', nameInp),
-    field('סכום (₪)', amountInp),
-    el('div', { class: 'modal-footer' },
-      el('button', { type: 'button', class: 'btn btn-secondary', onclick: closeModal }, 'ביטול'),
-      el('button', { type: 'submit', class: 'btn btn-primary' }, isEdit ? 'עדכן' : 'הוסף'),
-    ),
+    field('סכום מתוכנן חודשי (₪)', amountInp),
+    paymentsSection,
+    el('div', { class: 'modal-footer' }, ...footerButtons),
   );
 
   form.addEventListener('submit', (e) => {
@@ -687,18 +915,63 @@ function openBudgetItemModal(cat, item) {
     renderDashboard();
   });
 
-  openModal({ title: isEdit ? `עריכת סעיף ב${cat.name}` : `סעיף חדש ב${cat.name}`, body: form });
+  openModal({ title: isEdit ? `עריכת סעיף: ${item.name}` : `סעיף חדש ב${cat.name}`, body: form });
   nameInp.focus();
 }
 
+function openPaymentModal(cat, item, existing) {
+  const isEdit = !!existing;
+  const form = el('form');
+  const amountInp = el('input', { class: 'input', type: 'number', step: '0.01', required: true, value: existing?.amount || '', placeholder: '0' });
+  const dateInp = el('input', { class: 'input', type: 'date', value: existing?.date ? fmt.dateInput(existing.date) : fmt.dateInput(Date.now()) });
+  const notesInp = el('textarea', { class: 'input', placeholder: 'הערות (אופציונלי)', rows: 2 });
+  notesInp.value = existing?.notes || '';
+
+  form.append(
+    field('סכום בפועל (₪)', amountInp),
+    field('תאריך', dateInp),
+    field('הערות', notesInp),
+    el('div', { class: 'modal-footer' },
+      el('button', { type: 'button', class: 'btn btn-secondary', onclick: () => { closeModal(); openBudgetItemModal(cat, item); } }, 'ביטול'),
+      el('button', { type: 'submit', class: 'btn btn-primary' }, isEdit ? 'עדכן' : 'הוסף'),
+    ),
+  );
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const data = {
+      amount: Number(amountInp.value) || 0,
+      date: dateInp.value ? new Date(dateInp.value).getTime() : Date.now(),
+      notes: notesInp.value.trim(),
+    };
+    if (isEdit) {
+      db.updatePayment(cat.id, item.id, existing.id, data);
+      toast('עודכן', 'success');
+    } else {
+      db.addPayment(cat.id, item.id, data);
+      toast('תשלום נוסף', 'success');
+    }
+    closeModal();
+    openBudgetItemModal(cat, item);
+    renderBudget();
+    renderDashboard();
+  });
+  openModal({ title: isEdit ? 'עריכת תשלום' : `תשלום חדש: ${item.name}`, body: form });
+  amountInp.focus();
+}
+
 function deleteBudgetItem(cat, item) {
+  closeModal();
   confirmDialog({
     title: 'מחיקת סעיף',
-    message: `למחוק את "${item.name}"?`,
+    message: `למחוק את "${item.name}" וכל ההוצאות הקשורות?`,
     confirmLabel: 'מחק',
     danger: true,
   }).then(ok => {
-    if (!ok) return;
+    if (!ok) {
+      // Re-open item modal if cancelled
+      openBudgetItemModal(cat, item);
+      return;
+    }
     db.deleteBudgetItem(cat.id, item.id);
     toast('הסעיף נמחק');
     renderBudget();
@@ -932,7 +1205,7 @@ function openWeeklyDetail(w) {
           class: 'picker-item' + (isSel ? ' selected' : ''),
           onclick: () => {
             if (selectedMap.has(it.id)) selectedMap.delete(it.id);
-            else selectedMap.set(it.id, { name: it.name, unit: it.unit, qty: Number(qtyInp.value) || 1, price: Number(priceInp.value) || 0 });
+            else selectedMap.set(it.id, { name: it.name, unit: it.unit, qty: Number(qtyInp.value) || 1, price: Number(priceInp.value) || 0, budgetCategory: it.budgetCategory });
             renderPicker();
           },
         },

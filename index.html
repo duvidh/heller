@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&family=Rubik:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/styles.css?v=5" />
+  <link rel="stylesheet" href="css/styles.css?v=6" />
 </head>
 <body>
 
@@ -144,9 +144,11 @@
         <div class="page-header">
           <div>
             <h2>שלום, <span id="dashboard-greeting"></span> 👋</h2>
-            <p class="page-sub">ככה נראה התקציב שלך החודש</p>
+            <p class="page-sub">ככה נראה התקציב שלך</p>
           </div>
         </div>
+
+        <div id="dashboard-period-filter"></div>
 
         <div class="stats-grid">
           <div class="stat-card glass">
@@ -160,9 +162,9 @@
           <div class="stat-card glass">
             <div class="stat-icon expense"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M7 10l5 5 5-5z"/></svg></div>
             <div class="stat-info">
-              <div class="stat-label">סה"כ הוצאות (תקציב)</div>
+              <div class="stat-label">הוצאות בפועל</div>
               <div class="stat-value" id="stat-budget">₪0</div>
-              <div class="stat-meta">תקציב חודשי משוער</div>
+              <div class="stat-meta" id="stat-budget-meta">מתוך תקציב</div>
             </div>
           </div>
           <div class="stat-card glass">
@@ -230,6 +232,10 @@
           <select id="shopping-filter-category" class="select">
             <option value="">כל הקטגוריות</option>
           </select>
+          <button class="btn btn-secondary btn-sm" id="clear-purchased" title="נקה את כל הסימונים">
+            <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+            נקה סימונים
+          </button>
         </div>
 
         <div class="category-totals" id="category-totals"></div>
@@ -287,9 +293,21 @@
           </div>
         </div>
 
+        <div id="budget-period-filter"></div>
+
         <div class="budget-summary glass">
-          <div class="budget-total-label">סה"כ תקציב חודשי</div>
-          <div class="budget-total-value" id="budget-grand-total">₪0</div>
+          <div class="summary-row">
+            <div class="summary-block">
+              <div class="budget-total-label" id="budget-grand-label">תקציב חודשי</div>
+              <div class="budget-total-value" id="budget-grand-total">₪0</div>
+            </div>
+            <div class="summary-divider"></div>
+            <div class="summary-block">
+              <div class="budget-total-label">בפועל <span id="budget-period-label" class="period-tag"></span></div>
+              <div class="budget-total-value actual" id="budget-grand-actual">₪0</div>
+            </div>
+          </div>
+          <div class="budget-progress big" id="budget-grand-progress"></div>
         </div>
 
         <div id="budget-list" class="budget-list"></div>
@@ -389,6 +407,6 @@
   <!-- ===== Toast ===== -->
   <div id="toast" class="toast"></div>
 
-  <script type="module" src="js/app.js?v=5"></script>
+  <script type="module" src="js/app.js?v=6"></script>
 </body>
 </html>

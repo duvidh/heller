@@ -132,6 +132,26 @@ export function getCategoryMeta(productCategories, name) {
   return c || { name, icon: '📦', color: '#64748b' };
 }
 
+/* --------- Period filter pill --------- */
+const PERIOD_OPTIONS = [
+  { type: 'currentMonth', label: 'החודש' },
+  { type: 'lastMonth', label: 'חודש שעבר' },
+  { type: 'currentYear', label: 'השנה' },
+  { type: 'all', label: 'הכל' },
+];
+
+export function renderPeriodFilter(currentPeriod, onChange) {
+  const wrap = el('div', { class: 'period-filter' });
+  PERIOD_OPTIONS.forEach(opt => {
+    const isActive = currentPeriod.type === opt.type;
+    wrap.appendChild(el('button', {
+      class: 'period-pill' + (isActive ? ' active' : ''),
+      onclick: () => onChange({ type: opt.type }),
+    }, opt.label));
+  });
+  return wrap;
+}
+
 export function categorySwatch(meta) {
   const bg = meta.color + '24';
   return el('div', {

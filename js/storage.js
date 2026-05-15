@@ -231,6 +231,54 @@ export const db = {
     this.setBudget(cats);
   },
 
+  // Payments (actuals recorded on a budget item)
+  addPayment(catId, itemId, payment) {
+    const cats = this.getBudget();
+    const cat = cats.find(c => c.id === catId);
+    if (!cat) return;
+    const it = (cat.items || []).find(i => i.id === itemId);
+    if (!it) return;
+    it.payments = it.payments || [];
+    payment.id = uuid();
+    if (!payment.date) payment.date = Date.now();
+    it.payments.push(payment);
+    this.setBudget(cats);
+  },
+  updatePayment(catId, itemId, paymentId, patch) {
+    const cats = this.getBudget();
+    const cat = cats.find(c => c.id === catId);
+    if (!cat) return;
+    const it = (cat.items || []).find(i => i.id === itemId);
+    if (!it || !it.payments) return;
+    const p = it.payments.find(x => x.id === paymentId);
+    if (p) Object.assign(p, patch);
+    this.setBudget(cats);
+  },
+  deletePayment(catId, itemId, paymentId) {
+    const cats = this.getBudget();
+    const cat = cats.find(c => c.id === catId);
+    if (!cat) return;
+    const it = (cat.items || []).find(i => i.id === itemId);
+    if (!it || !it.payments) return;
+    it.payments = it.payments.filter(p => p.id !== paymentId);
+    this.setBudget(cats);
+  },
+
+  // Item purchased toggle (for shopping list checkboxes)
+  toggleItemPurchased(id) {
+    const items = this.getItems();
+    const it = items.find(i => i.id === id);
+    if (it) {
+      it.purchased = !it.purchased;
+      this.setItems(items);
+    }
+  },
+  clearAllPurchased() {
+    const items = this.getItems();
+    items.forEach(i => i.purchased = false);
+    this.setItems(items);
+  },
+
   // Product categories (for shopping list grouping)
   getProductCategories() { return read(currentUser(), 'productCategories', []); },
   setProductCategories(cats) { write(currentUser(), 'productCategories', cats); },
@@ -311,3 +359,56 @@ export const db = {
 };
 
 export { uuid };
+
+/* --------- Period helpers --------- */
+// Period shape:
+//   { type: 'currentMonth' | 'lastMonth' | 'currentYear' | 'all' | 'custom', start?, end? }
+
+export function periodRange(period) {
+  const now = new Date();
+  if (period.type === 'currentMonth') {
+    const start = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 1).getTime() - 1;
+    return [start, end];
+  }
+  if (period.type === 'lastMonth') {
+    const start = new Date(now.getFullYear(), now.getMonth() - 1, 1).getTime();
+    const end = new Date(now.getFullYear(), now.getMonth(), 1).getTime() - 1;
+    return [start, end];
+  }
+  if (period.type === 'currentYear') {
+    const start = new Date(now.getFullYear(), 0, 1).getTime();
+    const end = new Date(now.getFullYear() + 1, 0, 1).getTime() - 1;
+    return [start, end];
+  }
+  if (period.type === 'custom') return [period.start || 0, period.end || Infinity];
+  return [0, Infinity]; // 'all'
+}
+
+export function inPeriod(timestamp, period) {
+  if (!timestamp) return false;
+  const [s, e] = periodRange(period);
+  return timestamp >= s && timestamp <= e;
+}
+
+// Multiplier for "planned" amount when viewing yearly (×12).
+export function plannedMultiplier(period) {
+  return period.type === 'currentYear' ? 12 : 1;
+}
+
+export function periodLabel(period) {
+  const months = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+  const now = new Date();
+  if (period.type === 'currentMonth') return months[now.getMonth()] + ' ' + now.getFullYear();
+  if (period.type === 'lastMonth') {
+    const d = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    return months[d.getMonth()] + ' ' + d.getFullYear();
+  }
+  if (period.type === 'currentYear') return 'שנתי ' + now.getFullYear();
+  if (period.type === 'all') return 'כל הזמן';
+  if (period.type === 'custom') {
+    const f = (t) => new Date(t).toLocaleDateString('he-IL');
+    return `${f(period.start)} — ${f(period.end)}`;
+  }
+  return '';
+}

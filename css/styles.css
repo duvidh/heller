@@ -634,6 +634,44 @@ select option { background: var(--bg-2); color: var(--text); }
 }
 .bar-row .val { font-weight: 600; min-width: 70px; text-align: left; }
 
+/* Dual bars (planned vs actual) on dashboard */
+.bar-row.dual {
+  grid-template-columns: 1fr 2fr auto;
+  align-items: center;
+  gap: 12px;
+}
+.bar-row.dual .bars {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.bar-row.dual .bar {
+  position: relative;
+  height: 6px;
+  background: var(--surface-2);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.bar-row.dual .bar > span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 3px;
+  transition: width .6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.bar-row.dual .bar.bar-actual > span {
+  background: linear-gradient(90deg, #34d399 0%, #22d3ee 100%);
+}
+.bar-row.dual .vals {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  text-align: end;
+  min-width: 90px;
+}
+.bar-row.dual .val.planned { font-size: 11.5px; color: var(--text-3); font-weight: 600; }
+.bar-row.dual .val.actual { font-size: 13px; color: #34d399; font-weight: 700; }
+
 .recent-list {
   display: flex;
   flex-direction: column;
@@ -764,12 +802,13 @@ select option { background: var(--bg-2); color: var(--text); }
 
 .item-row {
   display: grid;
-  grid-template-columns: 1fr 90px 90px 110px auto;
+  grid-template-columns: 30px 1fr 80px 80px 100px auto;
   gap: 10px;
   align-items: center;
   padding: 12px 18px;
   border-bottom: 1px solid var(--border);
   transition: var(--t-fast);
+  cursor: pointer;
 }
 .item-row:last-child { border-bottom: none; }
 .item-row:hover { background: var(--surface-2); }
@@ -893,6 +932,170 @@ select option { background: var(--bg-2); color: var(--text); }
   margin-bottom: 12px;
 }
 .isolation-notice svg { flex-shrink: 0; }
+
+/* -------- Period filter -------- */
+.period-filter {
+  display: flex;
+  gap: 6px;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+.period-pill {
+  padding: 8px 14px;
+  border: none;
+  background: transparent;
+  color: var(--text-2);
+  font-weight: 500;
+  font-size: 13px;
+  border-radius: 9px;
+  transition: var(--t-fast);
+  white-space: nowrap;
+}
+.period-pill:hover { background: var(--surface-2); color: var(--text); }
+.period-pill.active {
+  background: var(--grad-primary);
+  color: white;
+  box-shadow: var(--shadow-sm);
+}
+
+/* -------- Shopping checkbox & purchased state -------- */
+.item-checkbox {
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--border-strong);
+  border-radius: 6px;
+  cursor: pointer;
+  background: transparent;
+  position: relative;
+  transition: var(--t-fast);
+  flex-shrink: 0;
+}
+.item-checkbox:hover { border-color: var(--primary-2); }
+.item-checkbox:checked {
+  background: var(--grad-primary);
+  border-color: transparent;
+}
+.item-checkbox:checked::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z'/%3E%3C/svg%3E") center/16px no-repeat;
+}
+.item-row.purchased {
+  opacity: 0.45;
+  background: rgba(16, 185, 129, 0.04);
+}
+.item-row.purchased .name,
+.item-row.purchased .total,
+.item-row.purchased .qty,
+.item-row.purchased .price {
+  text-decoration: line-through;
+  text-decoration-color: var(--text-3);
+}
+
+/* -------- Budget actuals UI -------- */
+.budget-cat-card { cursor: default; }
+.budget-cat-header {
+  cursor: pointer;
+  user-select: none;
+  border-radius: 12px;
+  padding: 8px;
+  margin: -8px -8px 6px;
+  transition: var(--t-fast);
+}
+.budget-cat-header:hover { background: var(--surface-2); }
+
+.budget-cat-totals {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.budget-cat-totals .planned,
+.budget-cat-totals .actual {
+  font-size: 13px;
+  color: var(--text-3);
+}
+.budget-cat-totals .planned strong { color: var(--text-2); font-weight: 700; }
+.budget-cat-totals .actual strong { color: var(--accent); font-weight: 700; }
+.budget-progress {
+  position: relative;
+  height: 6px;
+  background: var(--surface-2);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+.budget-progress > span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--grad-primary);
+  border-radius: 3px;
+  transition: width .5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.budget-progress.over > span {
+  background: linear-gradient(90deg, var(--danger), #f97316);
+}
+
+.budget-item-row {
+  cursor: pointer;
+  user-select: none;
+}
+.budget-item-row:hover { background: var(--surface-3); }
+.budget-item-row .amounts {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.budget-item-row .planned-amt {
+  font-size: 12px;
+  color: var(--text-3);
+}
+.budget-item-row .actual-amt {
+  font-weight: 700;
+  font-size: 13.5px;
+}
+.budget-item-row .actual-amt.under { color: var(--success); }
+.budget-item-row .actual-amt.near { color: var(--warning); }
+.budget-item-row .actual-amt.over { color: var(--danger); }
+.budget-item-row .actual-amt.zero { color: var(--text-3); }
+
+/* Payments list inside item modal */
+.payments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.payment-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  font-size: 13px;
+}
+.payment-row .pay-date { font-size: 11.5px; color: var(--text-3); }
+.payment-row .pay-amt { font-weight: 700; color: var(--accent); }
+.payment-row .pay-del {
+  width: 26px; height: 26px;
+  border-radius: 7px;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: #fca5a5;
+  display: grid; place-items: center;
+}
 .weekly-item-row {
   display: grid;
   grid-template-columns: 1fr 70px 70px 90px auto;
@@ -1026,23 +1229,54 @@ select option { background: var(--bg-2); color: var(--text); }
 .budget-summary {
   padding: 22px 24px;
   margin-bottom: 22px;
-  text-align: center;
   background: var(--grad-card);
   border: 1px solid var(--border-strong);
 }
+.summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  gap: 14px;
+}
+.summary-block { text-align: center; flex: 1; min-width: 0; }
+.summary-divider { width: 1px; align-self: stretch; background: var(--border); }
 .budget-total-label {
-  font-size: 14px;
+  font-size: 13px;
   color: var(--text-2);
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.period-tag {
+  font-size: 11px;
+  padding: 2px 8px;
+  background: var(--surface-2);
+  border-radius: 6px;
+  color: var(--text-3);
 }
 .budget-total-value {
-  font-size: 42px;
+  font-size: 32px;
   font-weight: 900;
-  letter-spacing: -1px;
+  letter-spacing: -0.5px;
   background: var(--grad-primary);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  margin-top: 6px;
+  margin-top: 4px;
+}
+.budget-total-value.actual {
+  background: linear-gradient(135deg, #34d399 0%, #22d3ee 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.budget-progress.big { height: 10px; margin-top: 14px; }
+@media (max-width: 480px) {
+  .summary-row { flex-direction: column; gap: 8px; }
+  .summary-divider { width: 100%; height: 1px; }
+  .budget-total-value { font-size: 26px; }
 }
 
 .budget-list {
@@ -1453,18 +1687,20 @@ select option { background: var(--bg-2); color: var(--text); }
 
   /* Shopping items - card layout on mobile */
   .item-row {
-    grid-template-columns: 1fr auto;
+    grid-template-columns: 26px 1fr auto;
     gap: 6px 12px;
     padding: 12px 14px;
   }
-  .item-row .name { grid-column: 1 / -1; }
+  .item-row .item-checkbox { grid-column: 1; grid-row: 1 / span 2; align-self: center; }
+  .item-row .name { grid-column: 2; }
   .item-row .qty, .item-row .price, .item-row .total {
+    grid-column: 2;
     text-align: start;
     font-size: 13px;
   }
   .item-row .col-label { display: inline; margin-inline-end: 4px; }
   .item-row .total { text-align: start; }
-  .item-row .actions { grid-column: 2; grid-row: 1 / span 3; align-self: start; flex-direction: column; }
+  .item-row .actions { grid-column: 3; grid-row: 1 / span 5; align-self: start; flex-direction: column; }
 
   .cat-group-header { padding: 12px 14px; }
   .cat-group-header .title { font-size: 14px; }
