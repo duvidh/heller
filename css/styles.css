@@ -918,23 +918,87 @@ select option { background: var(--bg-2); color: var(--text); }
   padding-inline-end: 4px;
 }
 .picker-item {
-  display: grid;
-  grid-template-columns: 1fr 80px 70px 70px;
-  gap: 8px;
-  align-items: center;
-  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
   background: var(--surface-2);
-  border-radius: 10px;
+  border-radius: 12px;
   border: 1px solid var(--border);
   cursor: pointer;
   transition: var(--t-fast);
+  position: relative;
 }
 .picker-item:hover { background: var(--surface-3); border-color: var(--border-strong); }
-.picker-item.selected { border-color: var(--primary); background: rgba(124, 92, 255, 0.1); }
-.picker-item .name { font-weight: 600; font-size: 13.5px; }
-.picker-item .meta { font-size: 11px; color: var(--text-3); }
-.picker-item input { padding: 6px 8px; font-size: 13px; text-align: center; }
-.picker-item .price { font-weight: 700; color: var(--accent); text-align: center; font-size: 13.5px; }
+.picker-item.selected {
+  border-color: var(--primary);
+  background: rgba(124, 92, 255, 0.12);
+  box-shadow: 0 0 0 2px rgba(124, 92, 255, 0.18);
+}
+.picker-item.selected::before {
+  content: "✓";
+  position: absolute;
+  inset-inline-end: 10px;
+  top: 10px;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: var(--grad-primary);
+  color: white;
+  display: grid; place-items: center;
+  font-size: 13px;
+  font-weight: 700;
+}
+.picker-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+.picker-name-block {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.picker-item .name {
+  font-weight: 600;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.picker-item .meta { font-size: 11.5px; color: var(--text-3); }
+.picker-item .price {
+  font-weight: 700;
+  color: var(--accent);
+  font-size: 14px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.picker-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+}
+.inp-field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.inp-field label { font-size: 11px; color: var(--text-3); font-weight: 500; }
+.picker-item input {
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 14px;
+  text-align: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  outline: none;
+  box-sizing: border-box;
+}
+.picker-item input:focus { border-color: var(--primary); }
 
 /* -------- Budget page -------- */
 .budget-summary {
@@ -1396,14 +1460,6 @@ select option { background: var(--bg-2); color: var(--text); }
   .weekly-item-row input { font-size: 13px; }
   .weekly-item-row .total { grid-column: 1; }
   .weekly-item-row .del-btn { grid-column: 2; grid-row: 1 / span 3; align-self: start; }
-
-  .picker-item {
-    grid-template-columns: 1fr auto;
-    gap: 6px;
-    padding: 12px;
-  }
-  .picker-item .meta { grid-column: 1 / -1; }
-  .picker-item input { font-size: 13px; }
 
   .income-card {
     grid-template-columns: auto 1fr;

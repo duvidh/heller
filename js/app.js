@@ -537,7 +537,7 @@ function renderBudget() {
     const shoppingPart = cat.linkedToShopping ? (shopTotals[cat.name] || 0) : 0;
     const card = el('div', { class: 'budget-cat-card glass' });
 
-    card.append(
+    card.appendChild(
       el('div', { class: 'budget-cat-header' },
         el('div', {
           class: 'budget-cat-icon',
@@ -550,10 +550,12 @@ function renderBudget() {
           el('button', { class: 'icon-btn', onclick: () => deleteBudgetCat(cat), title: 'מחק' },
             el('svg', { viewBox: '0 0 24 24', width: 16, height: 16, html: '<path fill="currentColor" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>' })),
         ),
-      ),
-      cat.linkedToShopping ? el('span', { class: 'budget-cat-linked-badge' }, '🔗 מסונכרן עם רשימת הקניות') : null,
-      el('div', { class: 'budget-cat-total' }, fmt.money(total)),
+      )
     );
+    if (cat.linkedToShopping) {
+      card.appendChild(el('span', { class: 'budget-cat-linked-badge' }, '🔗 מסונכרן עם רשימת הקניות'));
+    }
+    card.appendChild(el('div', { class: 'budget-cat-total' }, fmt.money(total)));
 
     const itemsList = el('div', { class: 'budget-items-list' });
     if (cat.linkedToShopping && shoppingPart > 0) {
@@ -870,7 +872,7 @@ function openWeeklyDetail(w) {
     const allItems = db.getItems();
     const productCats = db.getProductCategories();
 
-    const search = el('input', { class: 'input', placeholder: '🔍 חפש מוצר...', style: 'margin-bottom:10px;' });
+    const search = el('input', { class: 'input', placeholder: 'חפש מוצר...', style: 'margin-bottom:10px;' });
     const catSel = el('select', { class: 'select', style: 'margin-bottom:10px;' },
       el('option', { value: '' }, 'כל הקטגוריות'),
       ...productCats.map(c => el('option', { value: c.name }, `${c.icon || ''} ${c.name}`))
@@ -914,13 +916,23 @@ function openWeeklyDetail(w) {
             renderPicker();
           },
         },
-          el('div', {},
-            el('div', { class: 'name' }, it.name),
-            el('div', { class: 'meta' }, `${it.productCategory} • ${it.unit}`),
+          el('div', { class: 'picker-top' },
+            el('div', { class: 'picker-name-block' },
+              el('div', { class: 'name' }, it.name),
+              el('div', { class: 'meta' }, `${it.productCategory} • ${it.unit}`),
+            ),
+            el('div', { class: 'price' }, fmt.money(it.price)),
           ),
-          el('div', { class: 'price' }, fmt.money(it.price)),
-          qtyInp,
-          priceInp,
+          el('div', { class: 'picker-inputs' },
+            el('div', { class: 'inp-field' },
+              el('label', {}, 'כמות'),
+              qtyInp,
+            ),
+            el('div', { class: 'inp-field' },
+              el('label', {}, 'מחיר'),
+              priceInp,
+            ),
+          ),
         );
         pickerList.appendChild(row);
       });
