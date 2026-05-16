@@ -2326,13 +2326,17 @@ function openSignInModal() {
 
 function humanFirebaseError(e) {
   const code = e?.code || '';
+  if (code.includes('operation-not-allowed'))
+    return 'שיטת Email/Password לא הופעלה ב-Firebase. כנס ל-Firebase Console → Authentication → Sign-in method → לחץ על "Email/Password" → Enable → Save. אחר כך נסה שוב.';
   if (code.includes('email-already-in-use')) return 'אימייל כבר רשום — נסה "התחברות"';
   if (code.includes('invalid-email')) return 'אימייל לא תקין';
   if (code.includes('weak-password')) return 'סיסמה חלשה — נסה לפחות 6 תווים';
   if (code.includes('wrong-password') || code.includes('invalid-credential')) return 'אימייל או סיסמה שגויים';
-  if (code.includes('user-not-found')) return 'משתמש לא קיים — נסה "יצירת חשבון"';
+  if (code.includes('user-not-found')) return 'משתמש לא קיים — עבור ללשונית "יצירת חשבון"';
   if (code.includes('network-request-failed')) return 'בעיית חיבור לאינטרנט';
   if (code.includes('too-many-requests')) return 'יותר מדי ניסיונות — נסה שוב מאוחר יותר';
+  if (code.includes('configuration-not-found') || code.includes('admin-restricted-operation'))
+    return 'Firebase Authentication לא מוגדר. ודא ש-Email/Password מופעל ב-Sign-in method.';
   return e?.message || 'שגיאה לא ידועה';
 }
 
