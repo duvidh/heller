@@ -112,17 +112,23 @@ document.addEventListener('keydown', (e) => {
 
 export function confirmDialog({ title = 'אישור', message, confirmLabel = 'אשר', danger = false }) {
   return new Promise((resolve) => {
+    let done = false;
+    const finish = (result) => {
+      if (done) return;
+      done = true;
+      resolve(result);
+    };
     const wrap = el('div', {},
       el('p', { style: 'margin:4px 0 16px; color: var(--text-2); font-size: 15px;' }, message),
       el('div', { class: 'modal-footer' },
-        el('button', { class: 'btn btn-secondary', onclick: () => { closeModal(); resolve(false); } }, 'ביטול'),
+        el('button', { class: 'btn btn-secondary', onclick: () => { finish(false); closeModal(); } }, 'ביטול'),
         el('button', {
           class: danger ? 'btn btn-danger' : 'btn btn-primary',
-          onclick: () => { closeModal(); resolve(true); }
+          onclick: () => { finish(true); closeModal(); }
         }, confirmLabel),
       )
     );
-    openModal({ title, body: wrap, onClose: () => resolve(false) });
+    openModal({ title, body: wrap, onClose: () => finish(false) });
   });
 }
 

@@ -1225,14 +1225,23 @@ function openWeeklyDetail(w) {
         qtyInp.addEventListener('input', updateTotal);
         priceInp.addEventListener('input', updateTotal);
 
-        list.appendChild(el('div', { class: 'weekly-item-row' },
+        const boughtChk = el('input', { type: 'checkbox', class: 'item-checkbox' });
+        boughtChk.checked = !!item.bought;
+        const row = el('div', { class: 'weekly-item-row' + (item.bought ? ' bought' : '') },
+          boughtChk,
           el('div', { class: 'name' }, item.name, el('div', { style: 'font-size:11px; color:var(--text-3);' }, item.unit || '')),
           qtyInp,
           priceInp,
           totalEl,
           el('button', { class: 'del-btn', onclick: () => { currentWeek.items.splice(idx, 1); persistWeek(); refresh(); } },
             el('svg', { viewBox: '0 0 24 24', width: 14, height: 14, html: '<path fill="currentColor" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>' })),
-        ));
+        );
+        boughtChk.addEventListener('change', () => {
+          item.bought = boughtChk.checked;
+          row.classList.toggle('bought', boughtChk.checked);
+          persistWeek();
+        });
+        list.appendChild(row);
       });
     }
 

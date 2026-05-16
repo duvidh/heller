@@ -1310,13 +1310,24 @@ select option { background: var(--bg-2); color: var(--text); }
 .tithe-row.done .name { text-decoration: line-through; }
 .weekly-item-row {
   display: grid;
-  grid-template-columns: 1fr 70px 70px 90px auto;
+  grid-template-columns: 28px 1fr 70px 70px 90px auto;
   gap: 8px;
   align-items: center;
   padding: 10px 12px;
   background: var(--surface-2);
   border-radius: 10px;
   border: 1px solid var(--border);
+  transition: opacity var(--t-fast), background var(--t-fast);
+}
+.weekly-item-row.bought {
+  opacity: 0.55;
+  background: rgba(16, 185, 129, 0.06);
+  border-color: rgba(16, 185, 129, 0.25);
+}
+.weekly-item-row.bought .name,
+.weekly-item-row.bought .total {
+  text-decoration: line-through;
+  text-decoration-color: var(--text-3);
 }
 .weekly-item-row .name { font-weight: 600; font-size: 13.5px; }
 .weekly-item-row input { padding: 6px 8px; font-size: 13px; text-align: center; }
@@ -2138,14 +2149,15 @@ select option { background: var(--bg-2); color: var(--text); }
   .budget-list { grid-template-columns: 1fr; }
 
   .weekly-item-row {
-    grid-template-columns: 1fr auto;
+    grid-template-columns: 26px 1fr auto;
     gap: 6px;
     padding: 12px;
   }
-  .weekly-item-row .name { grid-column: 1 / -1; }
-  .weekly-item-row input { font-size: 13px; }
-  .weekly-item-row .total { grid-column: 1; }
-  .weekly-item-row .del-btn { grid-column: 2; grid-row: 1 / span 3; align-self: start; }
+  .weekly-item-row .item-checkbox { grid-column: 1; grid-row: 1 / span 2; align-self: center; }
+  .weekly-item-row .name { grid-column: 2; }
+  .weekly-item-row input { font-size: 13px; grid-column: 2; }
+  .weekly-item-row .total { grid-column: 2; }
+  .weekly-item-row .del-btn { grid-column: 3; grid-row: 1 / span 5; align-self: start; }
 
   .income-card {
     grid-template-columns: auto 1fr;

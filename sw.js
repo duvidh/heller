@@ -1,5 +1,5 @@
 // Heller PWA service worker — cache-first with network fallback
-const VERSION = 'heller-v12';
+const VERSION = 'heller-v13';
 const SHELL = [
   './',
   './index.html',
