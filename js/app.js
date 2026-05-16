@@ -2197,22 +2197,81 @@ function openConfigureCloudModal() {
   ta.focus();
 }
 
-// Accept either a raw JSON object or a JS snippet `const firebaseConfig = {...}`
+// Accept anything: raw JSON, `const firebaseConfig = {...}`, or the full
+// Firebase setup snippet that includes import statements and comments.
 function parseFirebaseConfig(text) {
   text = (text || '').trim();
   if (!text) throw new Error('שדה ריק');
-  // Strip JS wrapping
-  text = text.replace(/^\s*(?:const|let|var)\s+\w+\s*=\s*/i, '');
-  text = text.replace(/;\s*$/, '');
-  // Try JSON first
-  try { return JSON.parse(text); } catch {}
-  // Try JS-literal (allowing unquoted keys / single quotes)
+
+  // 1. Try parsing the entire input as JSON
   try {
-    // eslint-disable-next-line no-new-func
-    return Function('return (' + text + ')')();
-  } catch (e) {
-    throw new Error('הקובץ לא תקין — לא הצלחתי לפענח JSON / object literal');
+    const r = JSON.parse(text);
+    if (r && typeof r === 'object' && r.apiKey) return r;
+  } catch {}
+
+  // 2. Locate "firebaseConfig" in the snippet and look for the object after it
+  let searchFrom = 0;
+  const idx = text.indexOf('firebaseConfig');
+  if (idx !== -1) {
+    const eq = text.indexOf('=', idx);
+    if (eq !== -1) searchFrom = eq;
   }
+
+  // 3. Extract the first balanced {...} block (string-aware, brace-counting)
+  const obj = extractObjectBlock(text, searchFrom);
+  if (!obj) {
+    throw new Error('לא מצאתי את האובייקט { apiKey: ... } בטקסט. הדבק את כל הבלוק שמתחיל ב "const firebaseConfig = {" עד "}".');
+  }
+
+  // 4. Parse as JSON first
+  try { return JSON.parse(obj); } catch {}
+
+  // 5. Parse as JS literal (handles unquoted keys, trailing commas, single quotes)
+  try {
+    return Function('"use strict";return (' + obj + ')')();
+  } catch (e) {
+    throw new Error('הצלחתי למצוא את האובייקט אבל לא להמיר אותו. ודא שהעתקת את כל הבלוק נכון.');
+  }
+}
+
+function extractObjectBlock(text, startFrom = 0) {
+  const startIdx = text.indexOf('{', startFrom);
+  if (startIdx === -1) return null;
+  let depth = 0;
+  let inString = false;
+  let stringChar = '';
+  let inLineComment = false;
+  let inBlockComment = false;
+  for (let i = startIdx; i < text.length; i++) {
+    const ch = text[i];
+    const next = text[i + 1];
+    if (inLineComment) {
+      if (ch === '\n') inLineComment = false;
+      continue;
+    }
+    if (inBlockComment) {
+      if (ch === '*' && next === '/') { inBlockComment = false; i++; }
+      continue;
+    }
+    if (inString) {
+      if (ch === '\\') { i++; continue; }
+      if (ch === stringChar) inString = false;
+      continue;
+    }
+    if (ch === '/' && next === '/') { inLineComment = true; i++; continue; }
+    if (ch === '/' && next === '*') { inBlockComment = true; i++; continue; }
+    if (ch === '"' || ch === "'" || ch === '`') {
+      inString = true;
+      stringChar = ch;
+      continue;
+    }
+    if (ch === '{') depth++;
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0) return text.substring(startIdx, i + 1);
+    }
+  }
+  return null;
 }
 
 function openSignInModal() {
